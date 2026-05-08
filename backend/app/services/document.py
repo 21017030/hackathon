@@ -18,8 +18,8 @@ if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
 # 사용할 모델 정의
-CHAT_MODEL = "gemini-2.0-flash-lite-preview-02-05" # Gemini 2.0 Flash Lite 정식 프리뷰 명칭
-EMBEDDING_MODEL = "models/embedding-001"
+CHAT_MODEL = "gemini-2.5-flash-lite" # Gemini 2.0 Flash Lite 정식 프리뷰 명칭
+EMBEDDING_MODEL = "gemini-embedding-001"
 
 MAGIC_NUMBERS = {
     ".pdf":  b"%PDF",
