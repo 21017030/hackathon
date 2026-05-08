@@ -1,13 +1,16 @@
 import os
+from typing import List
 
 from fastapi import APIRouter, File, UploadFile, HTTPException, Request, Form, BackgroundTasks
-from fastapi.responses import HTMLResponse
 
 from app.core.config import MAX_FILE_SIZE
-from app.models.document import UploadResponse
-from app.services.document import validate_file, upload_document, process_document_rag
+from app.models.document import UploadResponse, DocumentResponse
+from app.services.document import (
+    validate_file, upload_document, process_document_rag,
+    get_documents_by_student, get_documents_by_category, delete_document,
+)
 
-router = APIRouter()
+router = APIRouter(prefix="/documents", tags=["documents"])
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -16,7 +19,7 @@ async def upload_file(
     request: Request,
     file: UploadFile = File(...),
     student_id: str = Form(None),
-    category_id: int = Form(None)
+    category_id: int = Form(None),
 ):
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > MAX_FILE_SIZE:
@@ -29,17 +32,27 @@ async def upload_file(
     finally:
         await file.close()
 
-    # 파일 유효성 검사
     ext = validate_file(original_name, contents)
-    
-    # DB 및 스토리지 저장 (PENDING 상태)
     document_id = upload_document(original_name, contents, ext, student_id, category_id)
-
-    # RAG 처리를 백그라운드 태스크로 예약
     background_tasks.add_task(process_document_rag, document_id)
 
     return UploadResponse(
         document_id=document_id,
-        file_path=f"storage/documents/{document_id}", # 예시 경로
-        original_file_name=original_name
+        file_path=f"storage/documents/{document_id}",
+        original_file_name=original_name,
     )
+
+
+@router.get("/student/{student_id}", response_model=List[DocumentResponse])
+def list_by_student(student_id: str):
+    return get_documents_by_student(student_id)
+
+
+@router.get("/category/{category_id}", response_model=List[DocumentResponse])
+def list_by_category(category_id: int):
+    return get_documents_by_category(category_id)
+
+
+@router.delete("/{document_id}", status_code=204)
+def remove_document(document_id: int):
+    delete_document(document_id)

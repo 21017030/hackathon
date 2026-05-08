@@ -4,3 +4,8 @@ python-dotenv
 supabase
 python-multipart
 jupyter-server-proxy
+pymupdf
+google-generativeai
+passlib[bcrypt]
+python-pptx
+python-docx

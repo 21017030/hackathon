@@ -5,6 +5,8 @@ import io
 import fitz  # PyMuPDF
 from typing import List
 import google.generativeai as genai
+from pptx import Presentation
+from docx import Document as DocxDocument
 
 from fastapi import HTTPException
 
@@ -124,9 +126,20 @@ async def process_document_rag(document_id: int):
                     text += page.get_text()
         elif ext == ".txt":
             text = file_bytes.decode("utf-8")
+        elif ext in (".pptx",):
+            prs = Presentation(io.BytesIO(file_bytes))
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if shape.has_text_frame:
+                        for para in shape.text_frame.paragraphs:
+                            text += para.text + "\n"
+        elif ext in (".docx",):
+            docx = DocxDocument(io.BytesIO(file_bytes))
+            for para in docx.paragraphs:
+                text += para.text + "\n"
         else:
-            logger.warning(f"{ext} 형식은 아직 텍스트 추출을 지원하지 않습니다.")
-            text = f"[{doc_data['original_file_name']} 파일 내용 - 텍스트 추출 미지원 형식]"
+            logger.warning(f"{ext} 형식은 텍스트 추출을 지원하지 않습니다.")
+            text = f"[{doc_data['original_file_name']} - 텍스트 추출 미지원 형식]"
 
         if not text.strip():
             raise Exception("추출된 텍스트가 없습니다.")
@@ -160,3 +173,41 @@ async def process_document_rag(document_id: int):
     except Exception as e:
         logger.error(f"문서 {document_id} RAG 처리 중 오류: {e}")
         supabase.table("documents").update({"parsing_status": "FAILED"}).eq("id", document_id).execute()
+
+
+def get_documents_by_student(student_id: str) -> list:
+    res = supabase.table("documents").select("*").eq("student_id", student_id).order("created_at", desc=True).execute()
+    return res.data
+
+
+def get_documents_by_category(category_id: int) -> list:
+    res = supabase.table("documents").select("*").eq("category_id", category_id).order("created_at", desc=True).execute()
+    return res.data
+
+
+def delete_document(document_id: int) -> None:
+    res = supabase.table("documents").select("file_path").eq("id", document_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다.")
+
+    file_path = res.data[0]["file_path"]
+
+    # 청크 먼저 삭제 (FK 제약)
+    try:
+        supabase.table("document_chunks").delete().eq("document_id", document_id).execute()
+    except Exception as e:
+        logger.error("청크 삭제 실패: %s", e)
+        raise HTTPException(status_code=500, detail="문서 청크 삭제 중 오류가 발생했습니다.")
+
+    # 문서 레코드 삭제
+    try:
+        supabase.table("documents").delete().eq("id", document_id).execute()
+    except Exception as e:
+        logger.error("문서 DB 삭제 실패: %s", e)
+        raise HTTPException(status_code=500, detail="문서 정보 삭제 중 오류가 발생했습니다.")
+
+    # 스토리지 파일 삭제
+    try:
+        supabase.storage.from_("documents").remove([file_path])
+    except Exception as e:
+        logger.warning("스토리지 파일 삭제 실패 (이미 없을 수 있음): %s", e)

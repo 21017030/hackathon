@@ -1,0 +1,218 @@
+================================================================
+  VibeLRS 백엔드 구조 및 기능 설명
+  스택: FastAPI + Supabase (PostgreSQL + pgvector) + Google Gemini
+================================================================
+
+----------------------------------------------------------------
+1. 전체 디렉토리 구조
+----------------------------------------------------------------
+
+backend/
+├── main.py                        # 서버 진입점 (app.main의 app을 import)
+├── start.sh                       # 서버 실행 스크립트 (uvicorn 백그라운드 실행)
+├── requirements.txt               # Python 패키지 목록
+│
+├── app/
+│   ├── main.py                    # FastAPI 앱 생성 + CORS + 라우터 등록
+│   │
+│   ├── core/                      # 앱 전체에서 공유하는 핵심 설정
+│   │   ├── config.py              # 환경 변수 로드 (SUPABASE_URL, GEMINI_API_KEY 등)
+│   │   └── supabase.py            # Supabase 클라이언트 초기화 (전역 1개 인스턴스)
+│   │
+│   ├── models/                    # API 입출력 데이터 형식 정의 (Pydantic)
+│   │   ├── auth.py                # 회원가입/로그인 요청·응답 모델
+│   │   ├── category.py            # 카테고리 생성 요청·응답 모델
+│   │   ├── document.py            # 문서 업로드 응답, 문서 목록 응답 모델
+│   │   └── chat.py                # 채팅방/메시지 요청·응답 모델
+│   │
+│   ├── services/                  # 실제 비즈니스 로직 (DB 조작, 외부 API 호출)
+│   │   ├── auth.py                # 비밀번호 해싱, 회원가입/로그인 처리
+│   │   ├── category.py            # 카테고리 CRUD 처리
+│   │   ├── document.py            # 파일 검증, 스토리지 업로드, RAG 파이프라인
+│   │   └── chat.py                # 벡터 검색, Gemini 프롬프트 조합 및 응답 생성
+│   │
+│   └── api/routes/                # HTTP 엔드포인트 정의 (얇은 라우터 레이어)
+│       ├── auth.py                # POST /auth/register, POST /auth/login
+│       ├── categories.py          # POST/GET/DELETE /categories
+│       ├── documents.py           # POST /documents/upload, GET/DELETE /documents
+│       └── chat.py                # POST/GET /chat/session, POST /chat/ask, GET /chat/messages
+│
+└── tests/
+    └── test_db.py                 # Supabase DB 연결 수동 확인용 CLI 스크립트
+
+
+----------------------------------------------------------------
+2. core/ - 공통 설정
+----------------------------------------------------------------
+
+[config.py]
+  - python-dotenv로 .env 파일을 읽어 환경 변수를 상수로 노출한다.
+  - SUPABASE_URL, SUPABASE_KEY가 없으면 앱 시작 시 RuntimeError로 즉시 종료.
+  - GEMINI_API_KEY는 없어도 경고만 출력 (RAG 기능만 비활성화됨).
+  - MAX_FILE_SIZE = 50MB 상수 정의.
+
+[supabase.py]
+  - create_client()를 호출해 supabase 클라이언트를 모듈 수준(전역)에서 1개만 생성.
+  - 모든 service 파일에서 'from app.core.supabase import supabase'로 가져다 씀.
+
+
+----------------------------------------------------------------
+3. models/ - 데이터 형식 (Pydantic)
+----------------------------------------------------------------
+
+[auth.py]
+  - RegisterRequest  : student_id, login_id, password, name (회원가입 입력)
+  - LoginRequest     : login_id, password (로그인 입력)
+  - UserResponse     : student_id, login_id, name (응답 - 비밀번호 제외)
+
+[category.py]
+  - CategoryCreate   : student_id, name (카테고리 생성 입력)
+  - CategoryResponse : id, student_id, name, created_at (응답)
+
+[document.py]
+  - UploadResponse   : document_id, file_path, original_file_name (업로드 직후 응답)
+  - DocumentResponse : id, student_id, category_id, original_file_name,
+                       file_path, parsing_status, created_at (목록 조회 응답)
+
+[chat.py]
+  - ChatSessionCreate   : student_id, title
+  - ChatSessionResponse : id, student_id, title, created_at
+  - ChatAskRequest      : session_id, content, document_ids(선택)
+  - ChatMessageResponse : id, sender_type, content, created_at
+
+
+----------------------------------------------------------------
+4. services/ - 비즈니스 로직
+----------------------------------------------------------------
+
+[auth.py]
+  - passlib(bcrypt)로 비밀번호를 해싱해서 저장한다.
+  - register_user(): login_id 및 student_id 중복 검사 후 INSERT.
+  - login_user(): DB에서 유저 조회 → bcrypt.verify()로 비밀번호 비교.
+  - 응답에는 항상 비밀번호 해시를 제외한 UserResponse만 반환.
+
+[category.py]
+  - create_category(): categories 테이블에 INSERT.
+  - get_categories(): 특정 student_id의 카테고리를 오래된 순으로 조회.
+  - delete_category(): 연결된 문서가 있으면 409 에러 반환 (안전 삭제).
+
+[document.py]
+  핵심 함수 3개:
+
+  (1) validate_file(original_name, contents)
+      - 확장자 화이트리스트 검사 (.pdf .ppt .pptx .docx .txt)
+      - 파일 크기 50MB 초과 검사
+      - 매직 넘버(파일 시그니처) 검사로 확장자 위조 탐지
+      - txt는 UTF-8 디코딩 가능 여부 검사
+
+  (2) upload_document(original_name, contents, ext, student_id, category_id)
+      - UUID로 랜덤 파일명 생성 후 Supabase Storage 'documents' 버킷에 업로드
+      - documents 테이블에 메타데이터 INSERT (parsing_status = 'PENDING')
+      - 스토리지 업로드 성공 후 DB 실패 시 스토리지 파일도 롤백 삭제
+      - 생성된 document_id 반환
+
+  (3) process_document_rag(document_id)  ← 백그라운드 비동기 실행
+      RAG 인제스천 파이프라인 전체:
+      Step 1. Supabase Storage에서 파일 바이트 다운로드
+      Step 2. 파일 형식별 텍스트 추출
+              - PDF  : PyMuPDF(fitz)로 페이지별 텍스트 추출
+              - PPTX : python-pptx로 슬라이드별 텍스트프레임 순회
+              - DOCX : python-docx로 단락별 텍스트 추출
+              - TXT  : UTF-8 디코딩
+      Step 3. 1000자 단위로 텍스트 청킹
+      Step 4. 각 청크를 Gemini embedding-001 모델로 임베딩 벡터 생성
+              (task_type="retrieval_document")
+      Step 5. document_chunks 테이블에 (content, embedding, chunk_index) INSERT
+      Step 6. documents 테이블 parsing_status를 'COMPLETED'로 업데이트
+              (실패 시 'FAILED'로 업데이트)
+
+  추가 함수:
+  - get_documents_by_student(student_id): 해당 학생의 모든 문서 조회
+  - get_documents_by_category(category_id): 카테고리별 문서 조회
+  - delete_document(document_id): chunks → DB 레코드 → 스토리지 순서로 삭제
+
+[chat.py]
+  핵심 함수 2개:
+
+  (1) get_relevant_chunks(query_vector, document_ids, limit=5)
+      - Supabase RPC 함수 'match_document_chunks' 호출
+      - 코사인 유사도 >= 0.3인 청크를 최대 5개 반환
+      - document_ids를 넘기면 해당 문서들로 검색 범위 필터링
+
+  (2) ask_question(session_id, content, document_ids)
+      전체 RAG 질의응답 파이프라인:
+      Step 1. 사용자 질문을 chat_messages 테이블에 'USER' 타입으로 INSERT
+      Step 2. 질문을 Gemini embedding-001으로 벡터화
+              (task_type="retrieval_query")
+      Step 3. get_relevant_chunks()로 관련 청크 3~5개 검색
+      Step 4. chat_messages에서 최근 대화 5개 조회 (문맥 유지용)
+      Step 5. [강의자료 내용] + [이전 대화] + [질문]을 조합해 프롬프트 구성
+      Step 6. Gemini 2.5-flash-lite 모델에 프롬프트 전달 → 답변 생성
+      Step 7. AI 답변을 chat_messages에 'AI' 타입으로 INSERT 후 반환
+
+
+----------------------------------------------------------------
+5. api/routes/ - HTTP 엔드포인트
+----------------------------------------------------------------
+
+라우터는 HTTP 요청을 받아 서비스 함수를 호출하고 응답을 반환하는 역할만 한다.
+비즈니스 로직은 services/에 위임한다.
+
+[auth.py]  prefix 없음
+  POST /auth/register  → services/auth.register_user()   → 201 Created
+  POST /auth/login     → services/auth.login_user()      → 200 OK
+
+[categories.py]  prefix=/categories
+  POST   /categories              → services/category.create_category()  → 201 Created
+  GET    /categories/{student_id} → services/category.get_categories()   → 200 OK
+  DELETE /categories/{id}         → services/category.delete_category()  → 204 No Content
+
+[documents.py]  prefix=/documents
+  POST   /documents/upload            → 파일 검증 → 스토리지 업로드 → RAG 백그라운드 예약
+  GET    /documents/student/{id}      → services/document.get_documents_by_student()
+  GET    /documents/category/{id}     → services/document.get_documents_by_category()
+  DELETE /documents/{id}              → services/document.delete_document()
+
+[chat.py]  prefix=/chat
+  POST /chat/session               → chat_sessions 테이블에 INSERT
+  GET  /chat/sessions/{student_id} → 해당 학생의 세션 목록 (최신순)
+  POST /chat/ask                   → services/chat.ask_question() (RAG 전체 파이프라인)
+  GET  /chat/messages/{session_id} → 해당 세션의 메시지 목록 (시간순)
+
+
+----------------------------------------------------------------
+6. 전체 데이터 흐름 요약
+----------------------------------------------------------------
+
+[문서 업로드 흐름]
+  클라이언트 → POST /documents/upload
+    → 파일 검증 (확장자·크기·매직넘버)
+    → Supabase Storage 업로드
+    → documents 테이블 INSERT (PENDING)
+    → 즉시 응답 반환
+    → [백그라운드] 텍스트 추출 → 청킹 → 임베딩 → document_chunks INSERT
+    → documents 상태 COMPLETED 업데이트
+
+[채팅 질의응답 흐름]
+  클라이언트 → POST /chat/ask
+    → 질문 DB 저장 (USER)
+    → 질문 벡터화 (Gemini embedding)
+    → 유사 청크 검색 (pgvector 코사인 유사도)
+    → 최근 대화 5개 조회
+    → 프롬프트 조합 → Gemini LLM 호출
+    → AI 답변 DB 저장 (AI)
+    → 클라이언트에 답변 반환
+
+
+----------------------------------------------------------------
+7. 주요 외부 의존성
+----------------------------------------------------------------
+
+  supabase         : DB 쿼리 + 스토리지 파일 관리
+  google-generativeai : 임베딩(embedding-001) + 채팅(gemini-2.5-flash-lite)
+  pymupdf          : PDF 텍스트 추출
+  python-pptx      : PPTX 텍스트 추출
+  python-docx      : DOCX 텍스트 추출
+  passlib[bcrypt]  : 비밀번호 해싱
+  fastapi          : HTTP 서버 프레임워크
+  uvicorn          : ASGI 서버
