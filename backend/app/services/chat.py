@@ -2,8 +2,9 @@ import logging
 import google.generativeai as genai
 from typing import List, Optional
 
+from fastapi import HTTPException
 from app.core.supabase import supabase
-from app.services.document import CHAT_MODEL, EMBEDDING_MODEL
+from app.services.document import CHAT_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,8 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         embedding_res = genai.embed_content(
             model=EMBEDDING_MODEL,
             content=content,
-            task_type="retrieval_query"
+            task_type="retrieval_query",
+            output_dimensionality=EMBEDDING_DIMENSIONS,
         )
         query_vector = embedding_res['embedding']
 
@@ -103,3 +105,16 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
     except Exception as e:
         logger.exception(f"Error in ask_question: {str(e)}")
         raise e
+
+
+def delete_session(session_id: int) -> None:
+    exists = supabase.table("chat_sessions").select("id").eq("id", session_id).execute()
+    if not exists.data:
+        raise HTTPException(status_code=404, detail="채팅방을 찾을 수 없습니다.")
+
+    try:
+        supabase.table("chat_messages").delete().eq("session_id", session_id).execute()
+        supabase.table("chat_sessions").delete().eq("id", session_id).execute()
+    except Exception as e:
+        logger.error("채팅방 삭제 실패: %s", e)
+        raise HTTPException(status_code=500, detail="채팅방 삭제 중 오류가 발생했습니다.")

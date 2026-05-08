@@ -1,4 +1,5 @@
 import logging
+import traceback
 import uuid
 import os
 import io
@@ -20,8 +21,9 @@ if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
 # 사용할 모델 정의
-CHAT_MODEL = "gemini-2.5-flash-lite" # Gemini 2.0 Flash Lite 정식 프리뷰 명칭
-EMBEDDING_MODEL = "gemini-embedding-001"
+CHAT_MODEL = "gemini-2.5-flash-lite"
+EMBEDDING_MODEL = "gemini-embedding-002"
+EMBEDDING_DIMENSIONS = 768  # pgvector HNSW 인덱스 호환 (최대 2000차원)
 
 MAGIC_NUMBERS = {
     ".pdf":  b"%PDF",
@@ -154,7 +156,8 @@ async def process_document_rag(document_id: int):
             embedding_res = genai.embed_content(
                 model=EMBEDDING_MODEL,
                 content=chunk_content,
-                task_type="retrieval_document"
+                task_type="retrieval_document",
+                output_dimensionality=EMBEDDING_DIMENSIONS,
             )
             embedding_vector = embedding_res['embedding']
 
@@ -171,7 +174,7 @@ async def process_document_rag(document_id: int):
         logger.info(f"문서 {document_id} RAG 처리 완료 (Gemini 사용)")
 
     except Exception as e:
-        logger.error(f"문서 {document_id} RAG 처리 중 오류: {e}")
+        logger.error(f"문서 {document_id} RAG 처리 중 오류: {e}\n{traceback.format_exc()}")
         supabase.table("documents").update({"parsing_status": "FAILED"}).eq("id", document_id).execute()
 
 

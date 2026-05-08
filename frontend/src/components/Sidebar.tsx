@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, MessageSquare, Folder, User, HardDrive, ChevronDown } from 'lucide-react';
+import { Plus, MessageSquare, Folder, User, HardDrive, ChevronDown, Trash2 } from 'lucide-react';
 import type { Category, ChatSession, ViewMode } from '@/types';
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   selectedCategoryId: number | null;
   viewMode: ViewMode;
   onSessionClick: (id: number) => void;
+  onSessionDelete: (id: number) => void;
   onCategoryClick: (id: number) => void;
   onHomeClick: () => void;
   onNewSession: (title: string) => void;
@@ -25,6 +26,7 @@ export default function Sidebar({
   selectedCategoryId,
   viewMode,
   onSessionClick,
+  onSessionDelete,
   onCategoryClick,
   onHomeClick,
   onNewSession,
@@ -109,18 +111,28 @@ export default function Sidebar({
           <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-3">Recent Chats</h3>
           <div className="space-y-1">
             {sessions.map(session => (
-              <button
+              <div
                 key={session.id}
-                onClick={() => onSessionClick(session.id)}
-                className={`w-full text-left text-sm py-2 px-3 rounded-lg transition-colors flex items-center gap-2 ${
-                  currentSessionId === session.id
-                    ? 'text-indigo-600 font-bold bg-indigo-50'
-                    : 'text-gray-600 hover:bg-gray-50'
+                className={`group flex items-center gap-1 rounded-lg transition-colors ${
+                  currentSessionId === session.id ? 'bg-indigo-50' : 'hover:bg-gray-50'
                 }`}
               >
-                <MessageSquare size={14} className={currentSessionId === session.id ? 'text-indigo-500' : 'text-gray-400'} />
-                <p className="flex-1 truncate">{session.title}</p>
-              </button>
+                <button
+                  onClick={() => onSessionClick(session.id)}
+                  className={`flex-1 text-left text-sm py-2 pl-3 flex items-center gap-2 min-w-0 ${
+                    currentSessionId === session.id ? 'text-indigo-600 font-bold' : 'text-gray-600'
+                  }`}
+                >
+                  <MessageSquare size={14} className={currentSessionId === session.id ? 'text-indigo-500' : 'text-gray-400'} />
+                  <p className="truncate">{session.title}</p>
+                </button>
+                <button
+                  onClick={() => onSessionDelete(session.id)}
+                  className="pr-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
             ))}
             {sessions.length === 0 && (
               <p className="text-[10px] text-gray-400 px-3 italic">대화 내역이 없습니다.</p>

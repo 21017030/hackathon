@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 
 from app.models.chat import ChatSessionCreate, ChatSessionResponse, ChatAskRequest, ChatMessageResponse
-from app.services.chat import ask_question
+from app.services.chat import ask_question, delete_session
 from app.core.supabase import supabase
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -35,3 +35,7 @@ async def ask(request: ChatAskRequest):
 async def get_messages(session_id: int):
     res = supabase.table("chat_messages").select("*").eq("session_id", session_id).order("created_at", desc=False).execute()
     return res.data
+
+@router.delete("/sessions/{session_id}", status_code=204)
+async def remove_session(session_id: int):
+    delete_session(session_id)

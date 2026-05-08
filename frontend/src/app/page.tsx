@@ -11,7 +11,7 @@ import UploadModal from '@/components/UploadModal';
 import { useAppData } from '@/hooks/useAppData';
 import { useChat } from '@/hooks/useChat';
 import { uploadDocument } from '@/api/documents';
-import { createSession } from '@/api/chat';
+import { createSession, deleteSession } from '@/api/chat';
 import type { ViewMode } from '@/types';
 
 const STUDENT_ID = '20230001';
@@ -55,6 +55,19 @@ export default function App() {
     }
   };
 
+  const handleSessionDelete = async (id: number) => {
+    try {
+      await deleteSession(id);
+      setSessions(prev => prev.filter(s => s.id !== id));
+      if (currentSessionId === id) {
+        setCurrentSessionId(null);
+        setViewMode('explorer');
+      }
+    } catch {
+      alert('채팅방 삭제에 실패했습니다.');
+    }
+  };
+
   const handleSend = (content: string) => {
     const docIds = selectedCategoryId
       ? documents.filter(d => d.category_id === selectedCategoryId).map(d => d.id)
@@ -75,6 +88,7 @@ export default function App() {
         selectedCategoryId={selectedCategoryId}
         viewMode={viewMode}
         onSessionClick={handleSessionClick}
+        onSessionDelete={handleSessionDelete}
         onCategoryClick={id => { setSelectedCategoryId(id); setViewMode('explorer'); setCurrentSessionId(null); }}
         onHomeClick={() => { setViewMode('explorer'); setSelectedCategoryId(null); setCurrentSessionId(null); }}
         onNewSession={handleNewSession}

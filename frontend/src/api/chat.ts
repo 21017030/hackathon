@@ -28,3 +28,7 @@ export async function askQuestion(
   });
   return res.data;
 }
+
+export async function deleteSession(sessionId: number): Promise<void> {
+  await client.delete(`/chat/sessions/${sessionId}`);
+}
