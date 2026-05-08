@@ -1,0 +1,105 @@
+import logging
+import google.generativeai as genai
+from typing import List, Optional
+
+from app.core.supabase import supabase
+from app.services.document import CHAT_MODEL, EMBEDDING_MODEL
+
+logger = logging.getLogger(__name__)
+
+async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[List[int]] = None, limit: int = 5):
+    try:
+        rpc_params = {
+            "query_embedding": query_vector,
+            "match_threshold": 0.3, # 검색 범위를 좀 더 넓힘
+            "match_count": limit,
+        }
+        if document_ids:
+            rpc_params["filter_document_ids"] = document_ids
+
+        logger.info(f"Calling RPC match_document_chunks with params: {rpc_params}")
+        res = supabase.rpc("match_document_chunks", rpc_params).execute()
+        return res.data
+    except Exception as e:
+        logger.error(f"Vector search failed: {str(e)}")
+        # RPC 함수가 없으면 여기서 에러가 납니다.
+        return []
+
+async def ask_question(session_id: int, content: str, document_ids: Optional[List[int]] = None):
+    try:
+        # 1. 사용자 질문 저장
+        logger.info(f"Saving user message to session {session_id}")
+        supabase.table("chat_messages").insert({
+            "session_id": session_id,
+            "sender_type": "USER",
+            "content": content
+        }).execute()
+
+        # 2. 질문 임베딩 생성
+        logger.info(f"Generating embedding for question using {EMBEDDING_MODEL}")
+        embedding_res = genai.embed_content(
+            model=EMBEDDING_MODEL,
+            content=content,
+            task_type="retrieval_query"
+        )
+        query_vector = embedding_res['embedding']
+
+        # 3. 관련 텍스트 조각 검색 (Vector Search)
+        chunks = await get_relevant_chunks(query_vector, document_ids)
+        if not chunks:
+            logger.warning("No relevant document chunks found for the query.")
+            context = "자료에서 관련 내용을 찾을 수 없습니다."
+        else:
+            context = "\n\n".join([c['content'] for c in chunks])
+            logger.info(f"Found {len(chunks)} relevant chunks.")
+
+        # 4. 과거 대화 내역 가져오기
+        history_res = supabase.table("chat_messages") \
+            .select("*") \
+            .eq("session_id", session_id) \
+            .order("created_at", desc=True) \
+            .limit(5) \
+            .execute()
+        
+        history = history_res.data[::-1]
+        history_str = "\n".join([f"{m['sender_type']}: {m['content']}" for m in history])
+
+        # 5. Gemini 2.0에게 프롬프트 전달
+        logger.info(f"Prompting Gemini model: {CHAT_MODEL}")
+        model = genai.GenerativeModel(CHAT_MODEL)
+        
+        prompt = f"""
+당신은 대학생의 학습을 돕는 유능한 AI 어시스턴트입니다. 
+제공된 [강의자료 내용]을 바탕으로 사용자의 질문에 답변하세요. 
+만약 자료에서 답을 찾을 수 없다면, 자료에 없는 내용이라고 솔직하게 말하세요.
+
+[강의자료 내용]
+{context}
+
+[이전 대화 내역]
+{history_str}
+
+사용자 질문: {content}
+
+답변:
+"""
+        
+        response = model.generate_content(prompt)
+        ai_answer = response.text
+
+        # 6. AI 답변 저장
+        logger.info("Saving AI response to DB")
+        res = supabase.table("chat_messages").insert({
+            "session_id": session_id,
+            "sender_type": "AI",
+            "content": ai_answer
+        }).execute()
+
+        if not res.data:
+            raise Exception("Failed to insert AI message into database")
+
+        return res.data[0]
+        
+    except Exception as e:
+        logger.exception(f"Error in ask_question: {str(e)}")
+        raise e

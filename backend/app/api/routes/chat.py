@@ -1,0 +1,37 @@
+from fastapi import APIRouter, HTTPException
+from typing import List
+
+from app.models.chat import ChatSessionCreate, ChatSessionResponse, ChatAskRequest, ChatMessageResponse
+from app.services.chat import ask_question
+from app.core.supabase import supabase
+
+router = APIRouter(prefix="/chat", tags=["chat"])
+
+@router.post("/session", response_model=ChatSessionResponse)
+async def create_session(request: ChatSessionCreate):
+    try:
+        res = supabase.table("chat_sessions").insert({
+            "student_id": request.student_id,
+            "title": request.title
+        }).execute()
+        return res.data[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/sessions/{student_id}", response_model=List[ChatSessionResponse])
+async def get_sessions(student_id: str):
+    res = supabase.table("chat_sessions").select("*").eq("student_id", student_id).order("created_at", desc=True).execute()
+    return res.data
+
+@router.post("/ask", response_model=ChatMessageResponse)
+async def ask(request: ChatAskRequest):
+    try:
+        message = await ask_question(request.session_id, request.content, request.document_ids)
+        return message
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/messages/{session_id}", response_model=List[ChatMessageResponse])
+async def get_messages(session_id: int):
+    res = supabase.table("chat_messages").select("*").eq("session_id", session_id).order("created_at", desc=False).execute()
+    return res.data
