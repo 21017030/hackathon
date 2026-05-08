@@ -19,7 +19,7 @@ if GEMINI_API_KEY:
 
 # 사용할 모델 정의
 CHAT_MODEL = "gemini-2.0-flash-lite-preview-02-05" # Gemini 2.0 Flash Lite 정식 프리뷰 명칭
-EMBEDDING_MODEL = "models/text-embedding-004" # 최신 안정화된 임베딩 모델
+EMBEDDING_MODEL = "models/embedding-001"
 
 MAGIC_NUMBERS = {
     ".pdf":  b"%PDF",
@@ -139,7 +139,7 @@ async def process_document_rag(document_id: int):
         for i, chunk_content in enumerate(chunks):
             # Gemini 임베딩 생성 (models/embedding-001 사용)
             embedding_res = genai.embed_content(
-                model="models/embedding-001",
+                model=EMBEDDING_MODEL,
                 content=chunk_content,
                 task_type="retrieval_document"
             )
