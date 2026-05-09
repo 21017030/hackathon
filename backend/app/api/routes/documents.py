@@ -5,11 +5,12 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Request, Form, B
 
 from app.core.config import MAX_FILE_SIZE
 from app.models.document import UploadResponse, DocumentResponse
-from app.services.document import (
-    validate_file, upload_document, process_document_rag,
+from app.services.document_storage import (
+    validate_file, upload_document,
     get_documents_by_user, get_documents_by_category, delete_document,
     get_document_view,
 )
+from app.services.document_rag import process_document_rag
 from app.services.chat import ask_about_document
 from app.core.supabase import supabase
 

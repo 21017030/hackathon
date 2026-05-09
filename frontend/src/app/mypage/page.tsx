@@ -1,27 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { updateUser } from '@/api/auth';
-import { STORAGE_KEY } from '@/constants';
-import type { User } from '@/types';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 
 export default function MyPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const user = useRequireAuth();
   const [pwForm, setPwForm] = useState({ password: '', passwordConfirm: '', error: '', success: false });
   const [pwSaving, setPwSaving] = useState(false);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { router.push('/'); return; }
-      setUser(JSON.parse(raw) as User);
-    } catch {
-      router.push('/');
-    }
-  }, []);
 
   const handlePwSave = async (e: React.FormEvent) => {
     e.preventDefault();

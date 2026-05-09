@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { checkLoginId, updateUser } from '@/api/auth';
-import { STORAGE_KEY, NAME_REGEX } from '@/constants';
+import { NAME_REGEX } from '@/constants';
 import { getApiErrorDetail } from '@/utils/apiError';
-import type { User } from '@/types';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 
 export default function EditProfilePage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const user = useRequireAuth();
   const [form, setForm] = useState({ studentId: '', loginId: '', name: '' });
   const [original, setOriginal] = useState({ studentId: '', loginId: '', name: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -19,18 +19,11 @@ export default function EditProfilePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { router.push('/'); return; }
-      const u = JSON.parse(raw) as User;
-      setUser(u);
-      const init = { studentId: u.student_id, loginId: u.login_id, name: u.name };
-      setForm(init);
-      setOriginal(init);
-    } catch {
-      router.push('/');
-    }
-  }, []);
+    if (!user) return;
+    const init = { studentId: user.student_id, loginId: user.login_id, name: user.name };
+    setForm(init);
+    setOriginal(init);
+  }, [user]);
 
   const set = (field: string, value: string) => {
     setForm(f => ({ ...f, [field]: value }));
