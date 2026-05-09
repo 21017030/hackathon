@@ -5,7 +5,7 @@ from google.genai import types
 
 from fastapi import HTTPException
 from app.core.supabase import supabase
-from app.services.document import CHAT_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, client
+from app.services.document import CHAT_MODEL, REWRITE_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, client
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def _rewrite_query(content: str, history: list) -> str:
 
 검색 쿼리:"""
     try:
-        response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
+        response = client.models.generate_content(model=REWRITE_MODEL, contents=prompt)
         rewritten = (response.text or "").strip()
         logger.info(f"쿼리 재작성: '{content}' → '{rewritten}'")
         return rewritten or content
