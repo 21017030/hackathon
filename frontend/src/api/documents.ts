@@ -33,3 +33,8 @@ export async function getDocumentView(documentId: number): Promise<DocumentView>
   const res = await client.get(`/documents/${documentId}/view`);
   return res.data;
 }
+
+export async function askAboutDocument(documentId: number, content: string): Promise<string> {
+  const res = await client.post(`/documents/${documentId}/ask`, { content });
+  return res.data.answer;
+}

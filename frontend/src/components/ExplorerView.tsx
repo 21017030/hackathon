@@ -14,7 +14,7 @@ interface Props {
   onUpload: (categoryId: number | null) => void;
   onDeleteFolder: (id: number) => void;
   onDeleteDocument: (id: number) => void;
-  onViewDocument: (id: number) => void;
+  onViewDocument: (id: number, filename: string) => void;
 }
 
 function StatusBadge({ status }: { status: Document['parsing_status'] }) {
@@ -195,7 +195,7 @@ export default function ExplorerView({
                 <tr key={doc.id} className="hover:bg-gray-50/30 transition-colors">
                   <td className="px-6 py-4">
                     <button
-                      onClick={() => onViewDocument(doc.id)}
+                      onClick={() => onViewDocument(doc.id, doc.original_file_name)}
                       className="flex items-center gap-3 text-left group/doc w-full"
                     >
                       <div className="w-9 h-9 bg-red-50 text-red-500 rounded-lg flex items-center justify-center shrink-0">

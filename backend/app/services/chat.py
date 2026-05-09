@@ -110,6 +110,35 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         raise e
 
 
+async def ask_about_document(document_id: int, content: str) -> str:
+    embedding_res = client.models.embed_content(
+        model=EMBEDDING_MODEL,
+        contents=content,
+        config=types.EmbedContentConfig(
+            task_type="retrieval_query",
+            output_dimensionality=EMBEDDING_DIMENSIONS,
+        ),
+    )
+    query_vector = embedding_res.embeddings[0].values
+
+    chunks = await get_relevant_chunks(query_vector, [document_id])
+    context = "\n\n".join(c['content'] for c in chunks) if chunks else "관련 내용을 찾을 수 없습니다."
+
+    prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
+아래 [문서 내용]을 바탕으로 질문에 간결하게 답변하세요.
+자료에 없는 내용은 솔직하게 모른다고 말하세요.
+
+[문서 내용]
+{context}
+
+질문: {content}
+
+답변:"""
+
+    response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
+    return response.text
+
+
 def delete_session(session_id: int) -> None:
     exists = supabase.table("chat_sessions").select("id").eq("id", session_id).execute()
     if not exists.data:

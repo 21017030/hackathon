@@ -10,6 +10,7 @@ from app.services.document import (
     get_documents_by_student, get_documents_by_category, delete_document,
     get_document_view,
 )
+from app.services.chat import ask_about_document
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -57,6 +58,15 @@ def list_by_category(category_id: int):
 @router.get("/{document_id}/view")
 def view_document(document_id: int):
     return get_document_view(document_id)
+
+
+@router.post("/{document_id}/ask")
+async def ask_document(document_id: int, body: dict):
+    content = body.get("content", "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="질문을 입력해주세요.")
+    answer = await ask_about_document(document_id, content)
+    return {"answer": answer}
 
 
 @router.delete("/{document_id}", status_code=204)

@@ -25,3 +25,15 @@ export interface Message {
 }
 
 export type ViewMode = 'chat' | 'explorer';
+
+export interface SimpleMessage {
+  sender: 'user' | 'ai';
+  content: string;
+}
+
+export interface OpenTab {
+  documentId: number;
+  filename: string;
+  messages: SimpleMessage[];
+  isAsking: boolean;
+}
