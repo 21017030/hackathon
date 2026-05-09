@@ -22,8 +22,8 @@ if GEMINI_API_KEY:
 
 # 사용할 모델 정의
 CHAT_MODEL = "gemini-2.5-flash-lite"
-EMBEDDING_MODEL = "gemini-embedding-002"
-EMBEDDING_DIMENSIONS = 768  # pgvector HNSW 인덱스 호환 (최대 2000차원)
+EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_DIMENSIONS = 1536  # pgvector HNSW 인덱스 호환 (최대 2000차원)
 
 MAGIC_NUMBERS = {
     ".pdf":  b"%PDF",
