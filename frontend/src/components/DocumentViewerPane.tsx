@@ -122,7 +122,7 @@ export default function DocumentViewerPane({ documentId, messages, isAsking, onS
                               {msg.sources.map((src, i) => (
                                 <div key={i} className="flex items-center gap-1 text-[10px] text-indigo-500 font-bold">
                                   <FileText size={9} />
-                                  <span>{src.filename}{src.page ? ` ${src.page}p` : ''}</span>
+                                  <span>{src.filename}</span>
                                 </div>
                               ))}
                             </div>

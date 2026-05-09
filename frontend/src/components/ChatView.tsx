@@ -63,7 +63,7 @@ export default function ChatView({ messages, currentSessionId, isAsking, onSend 
                           {msg.sources.map((src, i) => (
                             <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[11px] font-bold">
                               <FileText size={10} />
-                              <span>{src.category} › {src.filename}{src.page ? ` ${src.page}p` : ''}</span>
+                              <span>{src.category} › {src.filename}</span>
                             </div>
                           ))}
                         </div>
