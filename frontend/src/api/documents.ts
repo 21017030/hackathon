@@ -21,3 +21,15 @@ export async function uploadDocument(
 export async function deleteDocument(documentId: number): Promise<void> {
   await client.delete(`/documents/${documentId}`);
 }
+
+export interface DocumentView {
+  filename: string;
+  ext: string;
+  signed_url: string;
+  content: string;
+}
+
+export async function getDocumentView(documentId: number): Promise<DocumentView> {
+  const res = await client.get(`/documents/${documentId}/view`);
+  return res.data;
+}

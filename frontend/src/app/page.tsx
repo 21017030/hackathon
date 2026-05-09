@@ -7,6 +7,7 @@ import Sidebar from '@/components/Sidebar';
 import ExplorerView from '@/components/ExplorerView';
 import ChatView from '@/components/ChatView';
 import UploadModal from '@/components/UploadModal';
+import DocumentViewerModal from '@/components/DocumentViewerModal';
 import { useAppData } from '@/hooks/useAppData';
 import { useChat } from '@/hooks/useChat';
 import { uploadDocument, deleteDocument } from '@/api/documents';
@@ -23,6 +24,7 @@ export default function App() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadInitialCategoryId, setUploadInitialCategoryId] = useState<number | null>(null);
   const [uploadShowFolderSelect, setUploadShowFolderSelect] = useState(true);
+  const [viewingDocumentId, setViewingDocumentId] = useState<number | null>(null);
 
   const { categories, documents, sessions, setSessions, refresh } = useAppData(STUDENT_ID);
   const { messages, currentSessionId, setCurrentSessionId, sendMessage, isAsking, loadMessages } = useChat();
@@ -163,6 +165,7 @@ export default function App() {
               onCreateFolder={handleCreateFolder}
               onDeleteFolder={handleDeleteFolder}
               onDeleteDocument={handleDeleteDocument}
+              onViewDocument={setViewingDocumentId}
               onUpload={(categoryId) => openUploadModal(categoryId, false)}
             />
           ) : (
@@ -175,6 +178,13 @@ export default function App() {
           )}
         </div>
       </main>
+
+      {viewingDocumentId !== null && (
+        <DocumentViewerModal
+          documentId={viewingDocumentId}
+          onClose={() => setViewingDocumentId(null)}
+        />
+      )}
 
       {(uploadModalOpen || isUploading) && (
         <UploadModal

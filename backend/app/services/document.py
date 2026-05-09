@@ -179,6 +179,37 @@ async def process_document_rag(document_id: int):
         supabase.table("documents").update({"parsing_status": "FAILED"}).eq("id", document_id).execute()
 
 
+def get_document_view(document_id: int) -> dict:
+    res = supabase.table("documents").select("*").eq("id", document_id).single().execute()
+    doc = res.data
+    if not doc:
+        raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다.")
+
+    ext = os.path.splitext(doc["file_path"])[1].lower()
+
+    try:
+        signed = supabase.storage.from_("documents").create_signed_url(doc["file_path"], 3600)
+        signed_url = signed.get("signedURL") or signed.get("signedUrl") or ""
+    except Exception:
+        signed_url = ""
+
+    chunks_res = (
+        supabase.table("document_chunks")
+        .select("content, chunk_index")
+        .eq("document_id", document_id)
+        .order("chunk_index")
+        .execute()
+    )
+    content = "\n".join(c["content"] for c in chunks_res.data) if chunks_res.data else ""
+
+    return {
+        "filename": doc["original_file_name"],
+        "ext": ext,
+        "signed_url": signed_url,
+        "content": content,
+    }
+
+
 def get_documents_by_student(student_id: str) -> list:
     res = supabase.table("documents").select("*").eq("student_id", student_id).order("created_at", desc=True).execute()
     return res.data

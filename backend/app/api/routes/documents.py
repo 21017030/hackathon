@@ -8,6 +8,7 @@ from app.models.document import UploadResponse, DocumentResponse
 from app.services.document import (
     validate_file, upload_document, process_document_rag,
     get_documents_by_student, get_documents_by_category, delete_document,
+    get_document_view,
 )
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -51,6 +52,11 @@ def list_by_student(student_id: str):
 @router.get("/category/{category_id}", response_model=List[DocumentResponse])
 def list_by_category(category_id: int):
     return get_documents_by_category(category_id)
+
+
+@router.get("/{document_id}/view")
+def view_document(document_id: int):
+    return get_document_view(document_id)
 
 
 @router.delete("/{document_id}", status_code=204)

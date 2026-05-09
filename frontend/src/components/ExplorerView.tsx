@@ -14,6 +14,7 @@ interface Props {
   onUpload: (categoryId: number | null) => void;
   onDeleteFolder: (id: number) => void;
   onDeleteDocument: (id: number) => void;
+  onViewDocument: (id: number) => void;
 }
 
 function StatusBadge({ status }: { status: Document['parsing_status'] }) {
@@ -48,6 +49,7 @@ export default function ExplorerView({
   onUpload,
   onDeleteFolder,
   onDeleteDocument,
+  onViewDocument,
 }: Props) {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -192,17 +194,22 @@ export default function ExplorerView({
               {visibleDocs.map(doc => (
                 <tr key={doc.id} className="hover:bg-gray-50/30 transition-colors">
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 bg-red-50 text-red-500 rounded-lg flex items-center justify-center">
+                    <button
+                      onClick={() => onViewDocument(doc.id)}
+                      className="flex items-center gap-3 text-left group/doc w-full"
+                    >
+                      <div className="w-9 h-9 bg-red-50 text-red-500 rounded-lg flex items-center justify-center shrink-0">
                         <FileText size={20} />
                       </div>
                       <div className="overflow-hidden">
-                        <p className="font-bold text-gray-700 truncate">{doc.original_file_name}</p>
+                        <p className="font-bold text-gray-700 truncate group-hover/doc:text-indigo-600 transition-colors">
+                          {doc.original_file_name}
+                        </p>
                         <p className="text-[10px] text-gray-400">
                           {categories.find(c => c.id === doc.category_id)?.name ?? '분류 없음'}
                         </p>
                       </div>
-                    </div>
+                    </button>
                   </td>
                   <td className="px-6 py-4">
                     <StatusBadge status={doc.parsing_status} />
