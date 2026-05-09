@@ -10,9 +10,14 @@ from app.services.document import CHAT_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSI
 logger = logging.getLogger(__name__)
 
 
+_VAGUE_PRONOUNS = ('저거', '그거', '이거', '그게', '저게', '이게', '그것', '저것', '이것', '거기', '여기', '저기', '그건', '이건', '저건')
+
 def _enrich_query(content: str, history: list) -> str:
-    """마지막 AI 답변을 앞에 붙여 검색 쿼리에 대화 맥락을 반영 (추가 API 호출 없음)."""
+    """지시대명사가 포함된 모호한 팔로업에만 이전 AI 답변을 붙여 맥락 보강."""
     if not history:
+        return content
+    is_vague = any(p in content for p in _VAGUE_PRONOUNS)
+    if not is_vague:
         return content
     last_ai = next(
         (m.get('content', '')[:300] for m in reversed(history)
