@@ -178,10 +178,14 @@ export default function Sidebar({
           <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
             <User size={16} />
           </div>
-          <div className="flex-1 overflow-hidden">
-            <p className="text-xs font-bold truncate text-indigo-900">{userName}</p>
-            <p className="text-[10px] text-gray-500">{userStudentId}</p>
-          </div>
+          {userName ? (
+            <div className="flex-1 overflow-hidden">
+              <p className="text-xs font-bold truncate text-indigo-900">{userName}</p>
+              <p className="text-[10px] text-gray-500">{userStudentId}</p>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400">로그인 하세요</p>
+          )}
         </div>
       </div>
     </aside>

@@ -168,19 +168,6 @@ export default function RegisterPage() {
             )}
           </div>
 
-          {/* 학번 */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-gray-700">학번</label>
-            <input
-              type="text"
-              placeholder="학번을 입력하세요"
-              value={form.studentId}
-              onChange={e => set('studentId', e.target.value)}
-              className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.studentId ? 'border-red-400' : 'border-gray-200'}`}
-            />
-            {errors.studentId && <p className="text-red-500 text-xs">{errors.studentId}</p>}
-          </div>
-
           {/* 이름 */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-semibold text-gray-700">이름</label>
@@ -192,6 +179,19 @@ export default function RegisterPage() {
               className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.name ? 'border-red-400' : 'border-gray-200'}`}
             />
             {errors.name && <p className="text-red-500 text-xs">{errors.name}</p>}
+          </div>
+
+          {/* 학번 */}
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-semibold text-gray-700">학번</label>
+            <input
+              type="text"
+              placeholder="학번을 입력하세요"
+              value={form.studentId}
+              onChange={e => set('studentId', e.target.value)}
+              className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.studentId ? 'border-red-400' : 'border-gray-200'}`}
+            />
+            {errors.studentId && <p className="text-red-500 text-xs">{errors.studentId}</p>}
           </div>
 
           {errors.form && <p className="text-red-500 text-xs text-center">{errors.form}</p>}
