@@ -54,12 +54,13 @@ export default function App() {
   };
 
   const handleDocumentAsk = async (documentId: number, content: string) => {
+    const history = tabs.find(t => t.documentId === documentId)?.messages ?? [];
     setTabs(prev => prev.map(t => t.documentId === documentId
       ? { ...t, messages: [...t.messages, { sender: 'user', content }], isAsking: true }
       : t
     ));
     try {
-      const answer = await askAboutDocument(documentId, content);
+      const answer = await askAboutDocument(documentId, content, history);
       setTabs(prev => prev.map(t => t.documentId === documentId
         ? { ...t, messages: [...t.messages, { sender: 'ai', content: answer }], isAsking: false }
         : t

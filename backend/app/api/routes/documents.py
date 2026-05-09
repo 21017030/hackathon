@@ -65,7 +65,8 @@ async def ask_document(document_id: int, body: dict):
     content = body.get("content", "").strip()
     if not content:
         raise HTTPException(status_code=400, detail="질문을 입력해주세요.")
-    answer = await ask_about_document(document_id, content)
+    history = body.get("history", [])
+    answer = await ask_about_document(document_id, content, history)
     return {"answer": answer}
 
 

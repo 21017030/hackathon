@@ -1,5 +1,5 @@
 import client from './client';
-import type { Document } from '@/types';
+import type { Document, SimpleMessage } from '@/types';
 
 export async function getDocuments(studentId: string): Promise<Document[]> {
   const res = await client.get(`/documents/student/${studentId}`);
@@ -35,7 +35,11 @@ export async function getDocumentView(documentId: number): Promise<DocumentView>
   return res.data;
 }
 
-export async function askAboutDocument(documentId: number, content: string): Promise<string> {
-  const res = await client.post(`/documents/${documentId}/ask`, { content });
+export async function askAboutDocument(
+  documentId: number,
+  content: string,
+  history: SimpleMessage[] = [],
+): Promise<string> {
+  const res = await client.post(`/documents/${documentId}/ask`, { content, history });
   return res.data.answer;
 }

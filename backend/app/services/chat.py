@@ -110,7 +110,7 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         raise e
 
 
-async def ask_about_document(document_id: int, content: str) -> str:
+async def ask_about_document(document_id: int, content: str, history: list = None) -> str:
     embedding_res = client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=content,
@@ -124,12 +124,23 @@ async def ask_about_document(document_id: int, content: str) -> str:
     chunks = await get_relevant_chunks(query_vector, [document_id])
     context = "\n\n".join(c['content'] for c in chunks) if chunks else "관련 내용을 찾을 수 없습니다."
 
+    history_str = ""
+    if history:
+        lines = [
+            f"{'사용자' if m.get('sender') == 'user' else 'AI'}: {m.get('content', '')}"
+            for m in history[-5:]
+        ]
+        history_str = "\n".join(lines)
+
     prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
 아래 [문서 내용]을 바탕으로 질문에 간결하게 답변하세요.
 자료에 없는 내용은 솔직하게 모른다고 말하세요.
 
 [문서 내용]
 {context}
+
+[이전 대화 내역]
+{history_str}
 
 질문: {content}
 
