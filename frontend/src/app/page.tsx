@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useDropzone } from 'react-dropzone';
+import { useState } from 'react';
 import { Upload, ChevronRight } from 'lucide-react';
 
 import Sidebar from '@/components/Sidebar';
@@ -11,6 +10,7 @@ import UploadModal from '@/components/UploadModal';
 import { useAppData } from '@/hooks/useAppData';
 import { useChat } from '@/hooks/useChat';
 import { uploadDocument } from '@/api/documents';
+import { createCategory } from '@/api/categories';
 import { createSession, deleteSession } from '@/api/chat';
 import type { ViewMode } from '@/types';
 
@@ -20,24 +20,38 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('explorer');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadInitialCategoryId, setUploadInitialCategoryId] = useState<number | null>(null);
 
   const { categories, documents, sessions, setSessions, refresh } = useAppData(STUDENT_ID);
   const { messages, currentSessionId, setCurrentSessionId, sendMessage, isAsking, loadMessages } = useChat();
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (!acceptedFiles.length) return;
+  const openUploadModal = (categoryId: number | null) => {
+    setUploadInitialCategoryId(categoryId);
+    setUploadModalOpen(true);
+  };
+
+  const handleUpload = async (file: File, categoryId: number | null) => {
+    setUploadModalOpen(false);
     setIsUploading(true);
     try {
-      await uploadDocument(acceptedFiles[0], STUDENT_ID, selectedCategoryId);
+      await uploadDocument(file, STUDENT_ID, categoryId);
       refresh();
     } catch {
       alert('업로드에 실패했습니다.');
     } finally {
       setIsUploading(false);
     }
-  }, [selectedCategoryId, refresh]);
+  };
 
-  const { getRootProps, getInputProps } = useDropzone({ onDrop, multiple: false });
+  const handleCreateFolder = async (name: string) => {
+    try {
+      await createCategory(STUDENT_ID, name);
+      refresh();
+    } catch {
+      alert('폴더 생성에 실패했습니다.');
+    }
+  };
 
   const handleSessionClick = (id: number) => {
     setCurrentSessionId(id);
@@ -104,10 +118,9 @@ export default function App() {
             </span>
           </div>
           <button
-            {...getRootProps()}
+            onClick={() => openUploadModal(selectedCategoryId)}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all shadow-sm"
           >
-            <input {...getInputProps()} />
             <Upload size={16} /> 자료 업로드
           </button>
         </header>
@@ -120,6 +133,8 @@ export default function App() {
               selectedCategoryId={selectedCategoryId}
               onCategorySelect={setSelectedCategoryId}
               onStartChat={() => setViewMode('chat')}
+              onCreateFolder={handleCreateFolder}
+              onUpload={openUploadModal}
             />
           ) : (
             <ChatView
@@ -132,7 +147,15 @@ export default function App() {
         </div>
       </main>
 
-      {isUploading && <UploadModal />}
+      {(uploadModalOpen || isUploading) && (
+        <UploadModal
+          categories={categories}
+          initialCategoryId={uploadInitialCategoryId}
+          isUploading={isUploading}
+          onUpload={handleUpload}
+          onClose={() => setUploadModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

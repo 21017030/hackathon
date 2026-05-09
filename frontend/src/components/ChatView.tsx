@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { MessageSquare, Send, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import type { Message } from '@/types';
 
 interface Props {
@@ -44,7 +47,18 @@ export default function ChatView({ messages, currentSessionId, isAsking, onSend 
                   ? 'bg-indigo-600 text-white rounded-tr-none'
                   : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'
               }`}>
-                <p className="text-[15px] whitespace-pre-wrap">{msg.content}</p>
+                {msg.sender_type === 'USER' ? (
+                  <p className="text-[15px] whitespace-pre-wrap">{msg.content}</p>
+                ) : (
+                  <div className="text-[15px] prose prose-sm max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-strong:font-semibold prose-ul:my-2 prose-li:my-0.5 prose-p:my-1">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
             </div>
           ))
