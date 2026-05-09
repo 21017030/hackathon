@@ -96,11 +96,11 @@ def _filter_used_sources(ai_answer: str, all_sources: list) -> tuple[str, list]:
     """Gemini가 명시한 파일명만 출처로 필터링하고 마커를 답변에서 제거."""
     match = re.search(r'\[참고자료:([^\]]*)\]', ai_answer)
     if not match:
-        return ai_answer, all_sources
+        return ai_answer, []
     used_names = {f.strip() for f in match.group(1).split('|') if f.strip()}
     filtered = [s for s in all_sources if s['filename'] in used_names]
     cleaned = re.sub(r'\[참고자료:[^\]]*\]', '', ai_answer).strip()
-    return cleaned, filtered if filtered else all_sources
+    return cleaned, filtered
 
 
 async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[List[int]] = None, limit: int = 6):
@@ -154,12 +154,16 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         query_vector = embedding_res.embeddings[0].values
 
         # 4. 관련 청크 검색 (document_ids 없으면 해당 유저의 문서만 사용)
-        if not document_ids:
+        if document_ids is None:
             session_res = supabase.table("chat_sessions").select("user_id").eq("id", session_id).execute()
             user_id = session_res.data[0]["user_id"]
             docs_res = supabase.table("documents").select("id").eq("user_id", user_id).execute()
             document_ids = [d["id"] for d in docs_res.data]
-        chunks = await get_relevant_chunks_with_sources(query_vector, document_ids)
+
+        if document_ids:
+            chunks = await get_relevant_chunks_with_sources(query_vector, document_ids)
+        else:
+            chunks = []  # 유저의 문서가 없으면 빈 결과
         context = _build_context(chunks)
         sources = _extract_sources(chunks)
         logger.info(f"Found {len(chunks)} relevant chunks.")
