@@ -20,29 +20,36 @@ import { createSession, deleteSession } from '@/api/chat';
 import { POLL_INTERVAL_MS, POLL_MAX_WAIT_MS } from '@/constants';
 import type { ViewMode } from '@/types';
 
+/**
+ * 메인 애플리케이션 컴포넌트
+ * 화면의 전체적인 레이아웃과 상태 관리를 담당합니다.
+ */
 export default function App() {
   const router = useRouter();
-  const { user, saveUser, logout } = useAuth();
+  const { user, saveUser, logout } = useAuth(); // 사용자 인증 관련 훅
 
-  const [viewMode, setViewMode] = useState<ViewMode>('explorer');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [uploadStatus, setUploadStatus] = useState<'uploading' | 'analyzing' | null>(null);
-  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  // UI 상태 관리
+  const [viewMode, setViewMode] = useState<ViewMode>('explorer'); // 'explorer'(보관함) 또는 'chat'(채팅) 모드
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null); // 선택된 폴더 ID
+  const [uploadStatus, setUploadStatus] = useState<'uploading' | 'analyzing' | null>(null); // 업로드 및 분석 상태
+  const [uploadModalOpen, setUploadModalOpen] = useState(false); // 업로드 모달 오픈 여부
   const [uploadInitialCategoryId, setUploadInitialCategoryId] = useState<number | null>(null);
   const [uploadShowFolderSelect, setUploadShowFolderSelect] = useState(true);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false); // 로그인 모달 오픈 여부
 
   const userId = user?.id ?? '';
-  const { categories, documents, sessions, setSessions, refresh } = useAppData(userId);
-  const { messages, currentSessionId, setCurrentSessionId, sendMessage, isAsking, loadMessages } = useChat();
-  const { tabs, activeTabId, activeTab, setActiveTabId, openTab, closeTab, clearTab, askInTab } = useDocumentTabs();
+  // 커스텀 훅을 통한 데이터 및 비즈니스 로직 분리
+  const { categories, documents, sessions, setSessions, refresh } = useAppData(userId); // 앱 전반 데이터 (카테고리, 문서 등)
+  const { messages, currentSessionId, setCurrentSessionId, sendMessage, isAsking, loadMessages } = useChat(); // 채팅 로직
+  const { tabs, activeTabId, activeTab, setActiveTabId, openTab, closeTab, clearTab, askInTab } = useDocumentTabs(); // 문서 탭 관리 로직
 
+  // 인증이 필요한 동작을 수행하기 전 체크하는 함수
   const requireAuth = (action: () => void) => {
     if (!user) { setLoginModalOpen(true); return; }
     action();
   };
 
-  // ── 업로드 ────────────────────────────────────────────────
+  // ── 자료 업로드 로직 ──────────────────────────────────────
   const openUploadModal = (categoryId: number | null, showFolderSelect = true) => {
     requireAuth(() => {
       setUploadInitialCategoryId(categoryId);
@@ -51,6 +58,9 @@ export default function App() {
     });
   };
 
+  /**
+   * 서버에서 문서 분석(RAG용 임베딩)이 완료될 때까지 상태를 폴링(대기)합니다.
+   */
   const pollDocumentStatus = (documentId: number): Promise<void> =>
     new Promise((resolve, reject) => {
       const start = Date.now();
@@ -70,9 +80,9 @@ export default function App() {
     setUploadStatus('uploading');
     try {
       const { documentId } = await uploadDocument(file, userId, categoryId);
-      setUploadStatus('analyzing');
+      setUploadStatus('analyzing'); // 서버에서 PDF 내용을 읽고 분석하는 중...
       refresh();
-      await pollDocumentStatus(documentId);
+      await pollDocumentStatus(documentId); // 분석이 끝날 때까지 대기
       refresh();
     } catch {
       alert('업로드 또는 분석에 실패했습니다.');
@@ -81,7 +91,7 @@ export default function App() {
     }
   };
 
-  // ── 폴더 / 문서 ──────────────────────────────────────────
+  // ── 폴더 / 문서 관리 로직 ─────────────────────────────────
   const handleCreateFolder = (name: string) => {
     requireAuth(async () => {
       try {
@@ -120,7 +130,7 @@ export default function App() {
     }
   };
 
-  // ── 채팅 세션 ─────────────────────────────────────────────
+  // ── 채팅 세션 로직 ────────────────────────────────────────
   const handleSessionClick = (id: number) => {
     setCurrentSessionId(id);
     setViewMode('chat');
@@ -155,6 +165,7 @@ export default function App() {
 
   const handleSend = (content: string) => {
     requireAuth(() => {
+      // 선택된 폴더가 있다면 해당 폴더 내의 문서들만 참고하여 답변하도록 설정
       const docIds = selectedCategoryId
         ? documents.filter(d => d.category_id === selectedCategoryId).map(d => d.id)
         : undefined;
@@ -169,7 +180,7 @@ export default function App() {
     setActiveTabId(null);
   };
 
-  // ── 파생 값 ───────────────────────────────────────────────
+  // ── UI 상단 빵부스러기(Breadcrumb) 계산 ────────────────────
   const currentCategoryName = categories.find(c => c.id === selectedCategoryId)?.name ?? '모든 자료';
   const currentSessionTitle = sessions.find(s => s.id === currentSessionId)?.title ?? 'AI 학습 챗';
 
@@ -179,6 +190,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-[#F8F9FB] text-gray-800 font-sans">
+      {/* 왼쪽 사이드바: 프로필, 대화방 목록, 폴더 목록 */}
       <Sidebar
         userName={user?.name ?? ''}
         userStudentId={user?.student_id ?? ''}
@@ -195,7 +207,7 @@ export default function App() {
       />
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* 헤더 */}
+        {/* 상단 헤더: 제목 및 상단 버튼들 */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
           <div className="flex items-center gap-3 text-sm">
             <span className="text-gray-400">
@@ -254,7 +266,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* 탭 바 */}
+        {/* 문서 탭 바: 현재 열려있는 문서들 */}
         {tabs.length > 0 && (
           <div className="bg-white border-b border-gray-200 flex items-end px-4 overflow-x-auto shrink-0">
             {tabs.map(tab => (
@@ -284,8 +296,9 @@ export default function App() {
           </div>
         )}
 
-        {/* 콘텐츠 */}
+        {/* 중앙 메인 콘텐츠 영역 */}
         {activeTabId !== null && activeTab ? (
+          /* 문서 뷰어 모드: PDF 뷰어와 해당 문서 전용 채팅창 */
           <div className="flex-1 overflow-hidden">
             <DocumentViewerPane
               key={activeTabId}
@@ -297,6 +310,7 @@ export default function App() {
             />
           </div>
         ) : (
+          /* 일반 모드: 보관함(파일 탐색기) 또는 전체 채팅창 */
           <div className="flex-1 overflow-y-auto p-8">
             {viewMode === 'explorer' ? (
               <ExplorerView
@@ -323,6 +337,7 @@ export default function App() {
         )}
       </main>
 
+      {/* 업로드 모달 */}
       {(uploadModalOpen || uploadStatus !== null) && (
         <UploadModal
           categories={categories}
@@ -334,6 +349,7 @@ export default function App() {
         />
       )}
 
+      {/* 로그인/회원가입 모달 */}
       {loginModalOpen && (
         <AuthScreen
           onSuccess={u => { saveUser(u); setLoginModalOpen(false); }}
