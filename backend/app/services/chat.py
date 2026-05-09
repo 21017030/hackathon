@@ -250,7 +250,12 @@ async def ask_about_document(document_id: int, content: str, history: list = Non
 
     response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
     answer, sources = _filter_used_sources(response.text, sources)
-    return {"answer": answer, "sources": sources}
+
+    if sources:
+        src_lines = "\n".join(f"- {s['category']} > {s['filename']}" for s in sources)
+        answer = f"{answer}\n\n**참고 자료**\n{src_lines}"
+
+    return {"answer": answer, "sources": []}
 
 
 def delete_session(session_id: int) -> None:
