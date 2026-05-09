@@ -2,19 +2,19 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, Folder, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Upload, X, Folder, CheckCircle2, ChevronDown, Loader2, BrainCircuit } from 'lucide-react';
 import type { Category } from '@/types';
 
 interface Props {
   categories: Category[];
   initialCategoryId: number | null;
   showFolderSelect: boolean;
-  isUploading: boolean;
+  uploadStatus: 'uploading' | 'analyzing' | null;
   onUpload: (file: File, categoryId: number | null) => void;
   onClose: () => void;
 }
 
-export default function UploadModal({ categories, initialCategoryId, showFolderSelect, isUploading, onUpload, onClose }: Props) {
+export default function UploadModal({ categories, initialCategoryId, showFolderSelect, uploadStatus, onUpload, onClose }: Props) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(initialCategoryId);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -28,7 +28,8 @@ export default function UploadModal({ categories, initialCategoryId, showFolderS
     accept: { 'application/pdf': ['.pdf'] },
   });
 
-  if (isUploading) {
+  if (uploadStatus !== null) {
+    const isUploading = uploadStatus === 'uploading';
     return (
       <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-md z-50 flex items-center justify-center">
         <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center max-w-md mx-auto">
@@ -36,11 +37,30 @@ export default function UploadModal({ categories, initialCategoryId, showFolderS
             <div className="absolute inset-0 border-[6px] border-indigo-50 rounded-full" />
             <div className="absolute inset-0 border-[6px] border-indigo-600 rounded-full border-t-transparent animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center text-indigo-600">
-              <Upload size={48} />
+              {isUploading ? <Upload size={48} /> : <BrainCircuit size={48} />}
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">자료 분석 중...</h2>
-          <p className="text-gray-500">지식을 정리하고 있습니다.</p>
+
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            {isUploading ? '파일 업로드 중...' : 'AI 분석 중...'}
+          </h2>
+          <p className="text-gray-500 mb-6">
+            {isUploading ? '서버에 파일을 전송하고 있습니다.' : '이미지·표·텍스트를 읽고 지식을 정리하고 있습니다.'}
+          </p>
+
+          <div className="flex items-center justify-center gap-6 text-xs">
+            <div className={`flex items-center gap-1.5 font-bold ${uploadStatus === 'uploading' ? 'text-indigo-600' : 'text-emerald-500'}`}>
+              {uploadStatus === 'uploading'
+                ? <Loader2 size={13} className="animate-spin" />
+                : <CheckCircle2 size={13} />}
+              파일 업로드
+            </div>
+            <div className="w-8 h-px bg-gray-200" />
+            <div className={`flex items-center gap-1.5 font-bold ${uploadStatus === 'analyzing' ? 'text-indigo-600' : 'text-gray-300'}`}>
+              {uploadStatus === 'analyzing' && <Loader2 size={13} className="animate-spin" />}
+              AI 분석
+            </div>
+          </div>
         </div>
       </div>
     );

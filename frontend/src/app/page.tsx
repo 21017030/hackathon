@@ -10,7 +10,7 @@ import UploadModal from '@/components/UploadModal';
 import DocumentViewerPane from '@/components/DocumentViewerPane';
 import { useAppData } from '@/hooks/useAppData';
 import { useChat } from '@/hooks/useChat';
-import { uploadDocument, deleteDocument, askAboutDocument } from '@/api/documents';
+import { uploadDocument, deleteDocument, askAboutDocument, getDocuments } from '@/api/documents';
 import { createCategory, deleteCategory } from '@/api/categories';
 import { createSession, deleteSession } from '@/api/chat';
 import type { ViewMode, OpenTab } from '@/types';
@@ -20,7 +20,7 @@ const STUDENT_ID = '20230001';
 export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('explorer');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'uploading' | 'analyzing' | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadInitialCategoryId, setUploadInitialCategoryId] = useState<number | null>(null);
   const [uploadShowFolderSelect, setUploadShowFolderSelect] = useState(true);
@@ -79,16 +79,34 @@ export default function App() {
     setUploadModalOpen(true);
   };
 
+  const pollDocumentStatus = (documentId: number): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const MAX_WAIT = 3 * 60 * 1000;
+      const start = Date.now();
+      const check = async () => {
+        if (Date.now() - start > MAX_WAIT) { reject(new Error('시간 초과')); return; }
+        const docs = await getDocuments(STUDENT_ID);
+        const doc = docs.find(d => d.id === documentId);
+        if (doc?.parsing_status === 'COMPLETED') resolve();
+        else if (doc?.parsing_status === 'FAILED') reject(new Error('분석 실패'));
+        else setTimeout(check, 2000);
+      };
+      setTimeout(check, 2000);
+    });
+
   const handleUpload = async (file: File, categoryId: number | null) => {
     setUploadModalOpen(false);
-    setIsUploading(true);
+    setUploadStatus('uploading');
     try {
-      await uploadDocument(file, STUDENT_ID, categoryId);
+      const { documentId } = await uploadDocument(file, STUDENT_ID, categoryId);
+      setUploadStatus('analyzing');
+      refresh();
+      await pollDocumentStatus(documentId);
       refresh();
     } catch {
-      alert('업로드에 실패했습니다.');
+      alert('업로드 또는 분석에 실패했습니다.');
     } finally {
-      setIsUploading(false);
+      setUploadStatus(null);
     }
   };
 
@@ -285,12 +303,12 @@ export default function App() {
         )}
       </main>
 
-      {(uploadModalOpen || isUploading) && (
+      {(uploadModalOpen || uploadStatus !== null) && (
         <UploadModal
           categories={categories}
           initialCategoryId={uploadInitialCategoryId}
           showFolderSelect={uploadShowFolderSelect}
-          isUploading={isUploading}
+          uploadStatus={uploadStatus}
           onUpload={handleUpload}
           onClose={() => setUploadModalOpen(false)}
         />
