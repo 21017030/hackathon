@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 async def get_relevant_chunks_with_sources(
     query_vector: List[float],
     document_ids: Optional[List[int]] = None,
-    limit: int = 5,
+    limit: int = 8,
 ) -> list:
     chunks = await get_relevant_chunks(query_vector, document_ids, limit)
     if not chunks:
@@ -69,7 +69,7 @@ async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[
     try:
         rpc_params = {
             "query_embedding": query_vector,
-            "match_threshold": 0.3, # 검색 범위를 좀 더 넓힘
+            "match_threshold": 0.2,
             "match_count": limit,
         }
         if document_ids:
