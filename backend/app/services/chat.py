@@ -153,7 +153,12 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         )
         query_vector = embedding_res.embeddings[0].values
 
-        # 4. 관련 청크 검색
+        # 4. 관련 청크 검색 (document_ids 없으면 해당 유저의 문서만 사용)
+        if not document_ids:
+            session_res = supabase.table("chat_sessions").select("user_id").eq("id", session_id).execute()
+            user_id = session_res.data[0]["user_id"]
+            docs_res = supabase.table("documents").select("id").eq("user_id", user_id).execute()
+            document_ids = [d["id"] for d in docs_res.data]
         chunks = await get_relevant_chunks_with_sources(query_vector, document_ids)
         context = _build_context(chunks)
         sources = _extract_sources(chunks)
