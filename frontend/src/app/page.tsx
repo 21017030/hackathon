@@ -273,7 +273,7 @@ export default function App() {
                   <Upload size={16} /> 자료 업로드
                 </button>
                 <button
-                  onClick={logout}
+                  onClick={() => { logout(); window.location.reload(); }}
                   className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                   title="로그아웃"
                 >
