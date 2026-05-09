@@ -151,7 +151,8 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         res = supabase.table("chat_messages").insert({
             "session_id": session_id,
             "sender_type": "AI",
-            "content": ai_answer
+            "content": ai_answer,
+            "sources": sources,
         }).execute()
 
         if not res.data:
