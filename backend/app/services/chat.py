@@ -123,15 +123,7 @@ async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[
 
 async def ask_question(session_id: int, content: str, document_ids: Optional[List[int]] = None):
     try:
-        # 1. 사용자 질문 저장
-        logger.info(f"Saving user message to session {session_id}")
-        supabase.table("chat_messages").insert({
-            "session_id": session_id,
-            "sender_type": "USER",
-            "content": content
-        }).execute()
-
-        # 2. 과거 대화 내역 먼저 가져오기 (쿼리 재작성에 필요)
+        # 1. 과거 대화 내역 먼저 가져오기 (현재 질문 저장 전에 조회해야 정확함)
         history_res = supabase.table("chat_messages") \
             .select("*") \
             .eq("session_id", session_id) \
@@ -139,6 +131,14 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
             .limit(6) \
             .execute()
         history = history_res.data[::-1]
+
+        # 2. 사용자 질문 저장
+        logger.info(f"Saving user message to session {session_id}")
+        supabase.table("chat_messages").insert({
+            "session_id": session_id,
+            "sender_type": "USER",
+            "content": content
+        }).execute()
 
         # 3. 쿼리 재작성 + 임베딩
         search_query = _rewrite_query(content, history)
