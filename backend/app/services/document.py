@@ -71,6 +71,7 @@ def _extract_pdf_gemini(file_bytes: bytes, filename: str) -> str:
             contents=[
                 uploaded_file,
                 "이 PDF 문서의 전체 내용을 텍스트로 추출해주세요. "
+                "각 페이지가 시작될 때마다 반드시 '[N페이지]' 형식으로 페이지 번호를 표시하세요. "
                 "표, 이미지, 그래프, 차트가 있으면 그 내용도 설명해주세요. "
                 "마크다운 형식 없이 순수 텍스트로만 출력하세요.",
             ],
