@@ -22,12 +22,14 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadInitialCategoryId, setUploadInitialCategoryId] = useState<number | null>(null);
+  const [uploadShowFolderSelect, setUploadShowFolderSelect] = useState(true);
 
   const { categories, documents, sessions, setSessions, refresh } = useAppData(STUDENT_ID);
   const { messages, currentSessionId, setCurrentSessionId, sendMessage, isAsking, loadMessages } = useChat();
 
-  const openUploadModal = (categoryId: number | null) => {
+  const openUploadModal = (categoryId: number | null, showFolderSelect = true) => {
     setUploadInitialCategoryId(categoryId);
+    setUploadShowFolderSelect(showFolderSelect);
     setUploadModalOpen(true);
   };
 
@@ -134,7 +136,7 @@ export default function App() {
               onCategorySelect={setSelectedCategoryId}
               onStartChat={() => setViewMode('chat')}
               onCreateFolder={handleCreateFolder}
-              onUpload={openUploadModal}
+              onUpload={(categoryId) => openUploadModal(categoryId, false)}
             />
           ) : (
             <ChatView
@@ -151,6 +153,7 @@ export default function App() {
         <UploadModal
           categories={categories}
           initialCategoryId={uploadInitialCategoryId}
+          showFolderSelect={uploadShowFolderSelect}
           isUploading={isUploading}
           onUpload={handleUpload}
           onClose={() => setUploadModalOpen(false)}

@@ -8,12 +8,13 @@ import type { Category } from '@/types';
 interface Props {
   categories: Category[];
   initialCategoryId: number | null;
+  showFolderSelect: boolean;
   isUploading: boolean;
   onUpload: (file: File, categoryId: number | null) => void;
   onClose: () => void;
 }
 
-export default function UploadModal({ categories, initialCategoryId, isUploading, onUpload, onClose }: Props) {
+export default function UploadModal({ categories, initialCategoryId, showFolderSelect, isUploading, onUpload, onClose }: Props) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(initialCategoryId);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -51,23 +52,25 @@ export default function UploadModal({ categories, initialCategoryId, isUploading
           </button>
         </div>
 
-        <div className="mb-6">
-          <p className="text-sm font-bold text-gray-600 mb-2">폴더 선택</p>
-          <div className="relative">
-            <Folder size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            <select
-              value={selectedCategoryId ?? ''}
-              onChange={e => setSelectedCategoryId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full appearance-none pl-9 pr-9 py-3 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all"
-            >
-              <option value="">폴더 없음</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
-            <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        {showFolderSelect && (
+          <div className="mb-6">
+            <p className="text-sm font-bold text-gray-600 mb-2">폴더 선택</p>
+            <div className="relative">
+              <Folder size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <select
+                value={selectedCategoryId ?? ''}
+                onChange={e => setSelectedCategoryId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full appearance-none pl-9 pr-9 py-3 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all"
+              >
+                <option value="">폴더 없음</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
           </div>
-        </div>
+        )}
 
         <div
           {...getRootProps()}
