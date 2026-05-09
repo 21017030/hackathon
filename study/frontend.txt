@@ -1,6 +1,6 @@
 ================================================================
   VibeLRS 프론트엔드 구조 및 기능 설명
-  스택: Next.js 16 + React 19 + TypeScript + Tailwind CSS 4 + Axios
+  스택: Next.js + React + TypeScript + Tailwind CSS + Axios
 ================================================================
 
 ----------------------------------------------------------------
@@ -10,10 +10,10 @@
 frontend/src/
 │
 ├── app/                           # Next.js App Router 진입점
-│   ├── layout.tsx                 # 전체 페이지 공통 레이아웃 (폰트, 메타데이터)
+│   ├── layout.tsx                 # 전체 페이지 공통 레이아웃 (폰트, KaTeX CSS)
 │   ├── page.tsx                   # 루트 페이지 - 컴포넌트 조립 전용
-│   ├── globals.css                # Tailwind 임포트 + CSS 변수 정의
-│   └── favicon.ico                # 브라우저 탭 아이콘
+│   ├── globals.css                # Tailwind 임포트 + typography 플러그인
+│   └── favicon.ico
 │
 ├── types/
 │   └── index.ts                   # 앱 전체에서 쓰는 TypeScript 타입 정의
@@ -26,14 +26,14 @@ frontend/src/
 │
 ├── hooks/                         # 상태 관리 + 사이드이펙트 전담 커스텀 훅
 │   ├── useAppData.ts              # 카테고리·문서·세션 데이터 페칭 + 스마트 폴링
-│   └── useChat.ts                 # 채팅 메시지 상태 + 질문 전송 로직
+│   └── useChat.ts                 # 세션 채팅 메시지 상태 + 질문 전송 로직
 │
 └── components/                    # UI 컴포넌트
-    ├── Sidebar.tsx                # 좌측 사이드바 (네비게이션 + 채팅방 목록 + 카테고리)
-    ├── ExplorerView.tsx           # 문서 탐색기 뷰 (폴더 그리드 + 문서 테이블)
-    ├── ChatView.tsx               # 채팅 뷰 (메시지 목록 + 입력창, LaTeX/Markdown 렌더링)
-    ├── ExplorerView.tsx           # 문서 탐색기 뷰 (폴더 생성 + 파일 추가 포함)
-    └── UploadModal.tsx            # 업로드 다이얼로그 (폴더 선택 콤보박스 + 파일 드롭존)
+    ├── Sidebar.tsx                # 좌측 사이드바
+    ├── ExplorerView.tsx           # 문서 탐색기 뷰
+    ├── ChatView.tsx               # 세션 채팅 뷰
+    ├── DocumentViewerPane.tsx     # 문서 뷰어 + 미니 채팅 패널
+    └── UploadModal.tsx            # 업로드 다이얼로그 + 상태 오버레이
 
 
 ----------------------------------------------------------------
@@ -42,10 +42,17 @@ frontend/src/
 
   Category     : { id, name }
   Document     : { id, original_file_name, parsing_status, category_id, created_at }
-                 parsing_status는 'PENDING' | 'COMPLETED' | 'FAILED' 중 하나
+                 parsing_status: 'PENDING' | 'COMPLETED' | 'FAILED'
   ChatSession  : { id, title, created_at }
-  Message      : { id, sender_type, content, created_at }
-                 sender_type은 'USER' | 'AI' 중 하나
+  Source       : { filename, category }
+  Message      : { id, sender_type, content, created_at, sources?: Source[] }
+                 sender_type: 'USER' | 'AI'
+                 sources: 세션 채팅 출처 (DB에서 로드 시 포함)
+  SimpleMessage: { sender, content, sources?: Source[] }
+                 sender: 'user' | 'ai'
+                 문서 미니 채팅에서 사용
+  OpenTab      : { documentId, filename, messages: SimpleMessage[], isAsking }
+                 현재 열려 있는 문서 탭 상태
   ViewMode     : 'chat' | 'explorer'
 
 
@@ -56,23 +63,30 @@ frontend/src/
 [client.ts]
   - axios.create()로 baseURL='http://localhost:8000' 인스턴스를 1개 생성.
   - 모든 API 함수는 이 인스턴스를 import해서 사용한다.
-  - URL을 바꿀 때 이 파일 한 곳만 수정하면 된다.
 
 [categories.ts]
-  - getCategories(studentId)  : GET /categories/{studentId}
-  - createCategory(studentId, name) : POST /categories
-  - deleteCategory(categoryId): DELETE /categories/{categoryId}
+  - getCategories(studentId)       : GET /categories/{studentId}
+  - createCategory(studentId, name): POST /categories
+  - deleteCategory(categoryId)     : DELETE /categories/{categoryId}
 
 [documents.ts]
-  - getDocuments(studentId)   : GET /documents/student/{studentId}
-  - uploadDocument(file, studentId, categoryId) : POST /documents/upload (multipart/form-data)
-  - deleteDocument(documentId): DELETE /documents/{documentId}
+  - getDocuments(studentId)        : GET /documents/student/{studentId}
+  - uploadDocument(file, studentId, categoryId) : POST /documents/upload
+  - deleteDocument(documentId)     : DELETE /documents/{documentId}
+  - getDocumentView(documentId)    : GET /documents/{documentId}/view
+  - getDocumentChat(documentId)    : GET /documents/{documentId}/chat
+                                     반환 시 sender_type → sender 매핑 처리
+  - clearDocumentChat(documentId)  : DELETE /documents/{documentId}/chat
+  - askAboutDocument(documentId, content) : POST /documents/{documentId}/ask
+                                     history를 프론트에서 넘기지 않음 (백엔드가 DB에서 로드)
 
 [chat.ts]
-  - getSessions(studentId)    : GET /chat/sessions/{studentId}
-  - createSession(studentId, title) : POST /chat/session
-  - getMessages(sessionId)    : GET /chat/messages/{sessionId}
+  - getSessions(studentId)         : GET /chat/sessions/{studentId}
+  - createSession(studentId, title): POST /chat/session
+  - getMessages(sessionId)         : GET /chat/messages/{sessionId}
   - askQuestion(sessionId, content, documentIds) : POST /chat/ask
+                                     응답: { ...message, sources: [...] } 병합
+  - deleteSession(sessionId)       : DELETE /chat/sessions/{sessionId}
 
 
 ----------------------------------------------------------------
@@ -86,29 +100,32 @@ frontend/src/
     categories  : Category[]
     documents   : Document[]
     sessions    : ChatSession[]
-    setSessions : 외부에서 세션 목록을 직접 수정할 때 사용 (채팅방 생성 즉시 반영)
+    setSessions : 외부에서 세션 목록을 직접 수정할 때 사용
     refresh     : 데이터 전체를 수동으로 다시 불러오는 함수
 
   동작 방식:
-    - 컴포넌트 마운트 시 3개 API를 Promise.all로 병렬 호출.
+    - 마운트 시 categories, documents, sessions를 Promise.allSettled로 병렬 호출.
+      ※ Promise.all 대신 allSettled 사용 → 하나 실패해도 나머지는 정상 반영
+    - 동시 refresh 호출 방지: isRefreshing ref로 중복 실행 차단,
+      pendingRefresh ref로 대기 후 완료 시 재실행
     - PENDING 상태인 문서가 있을 때만 5초마다 자동 폴링 실행.
-    - PENDING 문서가 없으면 폴링 타이머를 정리(clearInterval)해서 불필요한 요청 방지.
+    - PENDING 문서가 없으면 폴링 타이머 정리(clearInterval)
 
 [useChat.ts]
-  역할: 현재 선택된 채팅 세션의 메시지 상태와 질문 전송 로직 관리.
+  역할: 세션 채팅 메시지 상태와 질문 전송 로직 관리.
 
   반환값:
-    messages          : Message[]
-    currentSessionId  : number | null
-    setCurrentSessionId : 세션 전환 시 사용
+    messages             : Message[]
+    currentSessionId     : number | null
+    setCurrentSessionId  : 세션 전환 시 사용
     sendMessage(content, documentIds) : 질문 전송 함수
-    isAsking          : AI 응답 대기 중 여부 (true면 입력창 비활성화)
+    isAsking             : AI 응답 대기 중 여부
     loadMessages(sessionId) : 특정 세션의 메시지를 서버에서 불러오는 함수
 
   sendMessage 동작:
-    1. 사용자 메시지를 낙관적 업데이트(optimistic update)로 UI에 즉시 표시
-    2. POST /chat/ask 호출 (백엔드에서 RAG 처리)
-    3. AI 응답을 받아 메시지 목록에 추가
+    1. 사용자 메시지를 낙관적 업데이트로 UI에 즉시 표시
+    2. POST /chat/ask 호출 (백엔드 RAG 파이프라인)
+    3. AI 응답(sources 포함)을 메시지 목록에 추가
 
 
 ----------------------------------------------------------------
@@ -118,127 +135,135 @@ frontend/src/
 [Sidebar.tsx]
   위치: 화면 좌측 고정 (w-64)
 
-  구성 요소:
+  구성 요소 (위→아래 순서):
     - VibeLRS 로고 (클릭 시 홈으로 이동)
-    - '내 보관함' 버튼 (explorer 뷰로 이동)
+    - '내 보관함' 버튼
     - '새 대화 시작' 버튼 → 인라인 입력폼으로 전환
-      * 제목 입력 후 Enter 또는 '만들기' 클릭으로 채팅방 생성
-      * Escape 키로 취소
+      * Enter 또는 '만들기' 클릭으로 채팅방 생성, Escape로 취소
+    - Categories 섹션 (접기/펼치기, ChevronDown 아이콘)
+      * 카테고리 클릭 시 해당 폴더 필터링
     - Recent Chats 섹션: 채팅 세션 목록, 현재 세션 하이라이트
-    - Categories 섹션: 접기/펼치기 가능, 카테고리 클릭 시 해당 폴더로 이동
+      * hover 시 삭제(휴지통) 버튼 표시
     - 하단 프로필 영역: 학번 표시
 
-  Props:
-    studentId, sessions, categories, currentSessionId, selectedCategoryId,
-    viewMode, onSessionClick, onCategoryClick, onHomeClick, onNewSession
+  ※ 순서: Categories가 Recent Chats 위에 위치 (텍스트 내역이 아래)
 
 [ExplorerView.tsx]
   역할: 문서 탐색기 화면
 
   구성 요소:
+    - '새 폴더' 버튼 → 인라인 입력폼으로 전환
     - 폴더 그리드 (selectedCategoryId가 null일 때만 표시)
-      * 카테고리별 카드, 카드 안에 포함된 문서 개수 표시
-      * 클릭 시 해당 카테고리 내 문서만 필터링
+      * 카테고리별 카드, 포함 문서 수 표시
+      * hover 시 업로드 아이콘 버튼 → 해당 폴더 선택된 채로 업로드 모달 열림
+      * hover 시 삭제 버튼 (폴더 내 파일도 일괄 삭제 경고 후 실행)
     - 문서 테이블
-      * 파일명, 카테고리 이름, 분석 상태 배지, '질문하기' 버튼
-      * 분석 상태 배지: 분석완료(초록), 분석중(노란색 + 회전 아이콘), 분석실패(빨간색)
-      * 문서가 없으면 '업로드된 문서가 없습니다' 메시지 표시
-    - StatusBadge: parsing_status에 따라 배지를 렌더링하는 내부 컴포넌트
-
-  Props:
-    categories, documents, selectedCategoryId, onCategorySelect, onStartChat
+      * 특정 폴더 내부에서 헤더에 '파일 추가' 버튼 표시
+      * 파일명(클릭 시 DocumentViewerPane 탭으로 열림), 카테고리, 상태 배지
+      * 우측에 삭제(빨간 휴지통) 버튼만 표시 (질문하기 버튼 제거됨)
+    - StatusBadge: COMPLETED(초록), PENDING(노란색+회전), FAILED(빨간색)
 
 [ChatView.tsx]
-  역할: AI 채팅 화면
+  역할: 세션 기반 AI 채팅 화면
 
   구성 요소:
-    - 메시지 목록 영역
-      * 메시지 없으면 안내 화면 표시 ('AI에게 질문하세요')
-      * USER 메시지: 우측 정렬, 인디고 배경, plain text 렌더링
-      * AI 메시지: 좌측 정렬, 흰 배경 + 테두리
-                   ReactMarkdown + remark-math + rehype-katex로 렌더링
-                   → **볼드**, 목록, $인라인 수식$, $$블록 수식$$ 모두 지원
-      * AI 응답 대기 중: 좌측에 로딩 스피너 표시
-    - 채팅 입력창 (화면 하단 fixed 고정)
-      * Enter 키로 전송, Shift+Enter로 줄바꿈
+    - 메시지 목록
+      * USER 메시지: 우측 정렬, 인디고 배경, plain text
+      * AI 메시지: 좌측 정렬, 흰 배경
+                   ReactMarkdown + remark-math + rehype-katex 렌더링
+                   → **볼드**, 목록, $수식$, $$블록수식$$ 지원
+      * AI 메시지 하단: sources가 있으면 '참고 자료' 배지 목록 표시
+        (카테고리 › 파일명 형식)
+      * AI 응답 대기 중: 로딩 스피너
+    - 입력창 (화면 하단 fixed 고정)
+      * Enter 전송, Shift+Enter 줄바꿈
       * 세션 미선택 또는 응답 대기 중이면 비활성화
-      * 전송 버튼: 대기 중에는 스피너로 전환
-      * 입력창 포커스 시 그라데이션 테두리 효과
+      * 포커스 시 그라데이션 테두리 효과
 
-  자체 input 상태를 가지며, 전송 시 content를 onSend로 전달하고 input 초기화.
+[DocumentViewerPane.tsx]
+  역할: 문서 뷰어 + 우측 미니 채팅 패널
 
-  Props:
-    messages, currentSessionId, isAsking, onSend(content)
-
-[ExplorerView.tsx]
-  역할: 문서 탐색기 화면
+  Props: documentId, messages, isAsking, onSend, onClear
 
   구성 요소:
-    - 폴더 섹션 헤더에 '새 폴더' 버튼
-      * 클릭 시 인라인 입력폼으로 전환 (Enter 확인, Escape 취소)
-      * 생성 완료 시 onCreateFolder(name) 호출
-    - 폴더 그리드 (selectedCategoryId가 null일 때만 표시)
-      * 카드 hover 시 우측에 업로드 아이콘 버튼 표시 → onUpload(categoryId) 호출
-      * 클릭 시 해당 카테고리 내 문서만 필터링
-    - 문서 테이블
-      * 특정 폴더 내부에 있을 때 헤더에 '파일 추가' 버튼 표시
-      * 파일명, 카테고리 이름, 분석 상태 배지, '질문하기' 버튼
-      * StatusBadge: parsing_status에 따라 배지를 렌더링하는 내부 컴포넌트
-
-  Props:
-    categories, documents, selectedCategoryId, onCategorySelect, onStartChat,
-    onCreateFolder(name), onUpload(categoryId)
+    - 좌측: 문서 뷰어 영역
+      * PDF면 signed_url로 <iframe> 렌더링
+      * 그 외 텍스트를 <pre>로 표시
+    - 우측: 미니 채팅 패널 (w-96, 접기/펼치기 가능)
+      * 헤더: 접기 버튼 + 'AI에게 물어보기' 타이틀
+              대화 내역이 있을 때 우측에 초기화(휴지통) 버튼 표시
+      * 메시지 목록: user(인디고 말풍선) / ai(회색 말풍선)
+                     AI 메시지는 ReactMarkdown 렌더링 + 출처 표시
+      * 입력창: Enter 전송, Shift+Enter 줄바꿈
+    - 탭 열 때 DB에서 이전 대화 내역 자동 로드
+    - 초기화 버튼 클릭 → confirm 후 DB + 로컬 상태 모두 삭제
 
 [UploadModal.tsx]
-  역할: 파일 업로드 다이얼로그 + 업로드 중 로딩 오버레이
+  역할: 파일 업로드 다이얼로그 + 업로드 상태 오버레이
 
-  두 가지 상태:
-    (1) isUploading=false : 업로드 다이얼로그 표시
-        - 폴더 선택: <select> 콤보박스 (왼쪽 폴더 아이콘, 오른쪽 화살표 아이콘)
-          * 기본값 '폴더 없음', 기존 카테고리 목록 표시
-          * initialCategoryId prop으로 초기 선택값 지정 가능
-        - 파일 드롭존: 드래그&드롭 또는 클릭으로 파일 선택
-          * 파일 선택 전: 업로드 아이콘 + 안내 텍스트
-          * 파일 선택 후: 체크 아이콘 + 파일명 표시
-        - 취소 / 업로드 버튼 (파일 미선택 시 업로드 버튼 비활성화)
-    (2) isUploading=true  : 전체 화면 로딩 오버레이
-        - backdrop-blur 반투명 배경
-        - 회전하는 원형 프로그레스 + '자료 분석 중...' 텍스트
+  uploadStatus: null | 'uploading' | 'analyzing'
 
-  Props:
-    categories, initialCategoryId, isUploading,
-    onUpload(file, categoryId), onClose
+  세 가지 상태:
+    (1) uploadStatus=null : 업로드 다이얼로그
+        - 폴더 선택 콤보박스 (initialCategoryId로 초기값 지정 가능)
+        - 파일 드롭존: 드래그&드롭 또는 클릭 선택
+        - 파일 선택 전 업로드 버튼 비활성화
+    (2) uploadStatus='uploading' : "파일을 저장하는 중..." 오버레이
+    (3) uploadStatus='analyzing' : "AI가 문서를 분석하는 중..." 오버레이
+        - 폴링으로 parsing_status가 COMPLETED가 될 때까지 대기
 
 
 ----------------------------------------------------------------
 6. app/page.tsx - 최상위 조립 컴포넌트
 ----------------------------------------------------------------
 
-  page.tsx는 비즈니스 로직을 직접 담지 않고,
-  훅과 컴포넌트를 연결하는 조립 역할만 한다. (약 124줄)
+  page.tsx는 훅과 컴포넌트를 연결하는 조립 역할만 한다.
 
   상태 관리:
     - viewMode ('explorer' | 'chat')
-    - selectedCategoryId (카테고리 필터)
-    - isUploading (업로드 중 여부)
-    - uploadModalOpen (업로드 다이얼로그 표시 여부)
-    - uploadInitialCategoryId (모달 열릴 때 기본 선택 폴더)
-    - useAppData 훅으로 categories, documents, sessions 관리
-    - useChat 훅으로 messages, currentSessionId, isAsking 관리
+    - selectedCategoryId
+    - uploadStatus ('uploading' | 'analyzing' | null)
+    - uploadModalOpen, uploadInitialCategoryId, uploadShowFolderSelect
+    - tabs: OpenTab[]         (열려 있는 문서 탭 목록)
+    - activeTabId: number | null
+    - useAppData → categories, documents, sessions
+    - useChat → messages, currentSessionId, isAsking, loadMessages
 
-  이벤트 핸들러:
-    - openUploadModal(categoryId) : 업로드 모달 열기 (초기 카테고리 지정)
-    - handleUpload(file, categoryId) : 모달에서 실제 업로드 실행
-    - handleCreateFolder(name) : 새 카테고리 생성 API 호출 후 refresh
-    - handleSessionClick  : 세션 선택 시 채팅 뷰로 전환 + 메시지 로드
-    - handleNewSession    : 새 채팅방 생성 후 즉시 해당 세션으로 이동
-    - handleSend    : 현재 선택된 카테고리의 document_ids를 계산해서 sendMessage 호출
+  주요 이벤트 핸들러:
+    openDocumentTab(documentId, filename)
+      - 탭이 없으면 새로 추가 (messages: [])
+      - DB에서 이전 대화 내역 로드 후 탭 상태 업데이트
+
+    closeTab(documentId)
+      - 탭 제거, 활성 탭이 닫히면 인접 탭으로 이동
+
+    handleDocumentAsk(documentId, content)
+      - 로컬 상태에 user 메시지 즉시 추가 (낙관적)
+      - askAboutDocument() 호출 후 AI 응답 추가
+
+    handleDocumentChatClear(documentId)
+      - confirm 후 clearDocumentChat() + 로컬 messages 초기화
+
+    handleUpload(file, categoryId)
+      - 'uploading' → uploadDocument() → 'analyzing'
+      - pollDocumentStatus()로 최대 3분 COMPLETED 대기
+      - 완료 후 null, refresh()
+
+    handleSessionClick, handleNewSession, handleSessionDelete
+      - 세션 전환, 생성, 삭제
+
+    handleSend(content)
+      - 현재 카테고리의 document_ids 계산 후 sendMessage() 호출
 
   레이아웃:
     - 좌측: <Sidebar />
-    - 우측 상단: 헤더 (breadcrumb + '자료 업로드' 버튼 → openUploadModal 호출)
-    - 우측 하단: viewMode에 따라 <ExplorerView /> 또는 <ChatView />
-    - 오버레이: uploadModalOpen이거나 isUploading이면 <UploadModal />
+    - 우측 상단: 헤더 (breadcrumb + '자료 업로드' 버튼)
+    - 탭 바: 열린 문서 탭 목록 (FileText 아이콘 + X 닫기)
+    - 콘텐츠:
+      * activeTabId != null → <DocumentViewerPane />
+      * explorer 뷰 → <ExplorerView />
+      * chat 뷰 → <ChatView />
+    - 오버레이: uploadModalOpen 또는 uploadStatus != null → <UploadModal />
 
 
 ----------------------------------------------------------------
@@ -247,49 +272,48 @@ frontend/src/
 
 [페이지 초기 로드]
   page.tsx 마운트
-    → useAppData: categories + documents + sessions 병렬 fetch
-    → 각 컴포넌트에 props로 전달 → UI 렌더링
+    → useAppData: categories + documents + sessions 병렬 fetch (allSettled)
+    → 각 컴포넌트에 props로 전달
 
 [파일 업로드]
-  헤더 '자료 업로드' 버튼 클릭 또는 폴더 카드 업로드 아이콘 클릭
-    → openUploadModal(categoryId) → UploadModal(다이얼로그) 표시
-    → 사용자가 폴더 선택(콤보박스) + 파일 선택(드롭존)
-    → '업로드' 클릭 → handleUpload(file, categoryId) 실행
-    → 모달 닫힘, isUploading = true → UploadModal(로딩 오버레이) 표시
-    → uploadDocument() 호출 (POST /documents/upload)
-    → 완료 후 refresh() → 문서 목록 갱신
-    → PENDING 문서 존재하면 5초 폴링 시작 → COMPLETED 되면 폴링 중단
+  '자료 업로드' or 폴더 업로드 아이콘 클릭
+    → UploadModal(다이얼로그) 표시
+    → 폴더 + 파일 선택 후 '업로드'
+    → uploadStatus='uploading' → POST /documents/upload
+    → uploadStatus='analyzing' → polling (2초 간격, 최대 3분)
+    → COMPLETED → uploadStatus=null, refresh()
 
-[채팅 질문]
-  사용자가 메시지 입력 후 전송
-    → ChatView의 handleSend → page.tsx의 handleSend
-    → 현재 카테고리의 document_ids 계산
-    → useChat.sendMessage() 호출
-    → 낙관적 업데이트로 USER 메시지 즉시 표시
-    → POST /chat/ask → 백엔드 RAG 파이프라인
-    → AI 응답 메시지 목록에 추가
+[문서 열기]
+  파일명 클릭
+    → openDocumentTab() → 탭 추가 + activeTabId 설정
+    → GET /documents/{id}/chat → 이전 대화 내역 로드
+    → DocumentViewerPane 렌더링
 
-[새 채팅방 생성]
-  사이드바 '새 대화 시작' 클릭
-    → 인라인 입력폼 표시 (prompt() 미사용)
-    → 제목 입력 후 '만들기'
-    → createSession() 호출
-    → sessions 상태에 즉시 추가 (setSessions)
-    → 생성된 세션으로 자동 이동
+[문서 미니 채팅]
+  입력창에 질문 입력 후 전송
+    → handleDocumentAsk() → 로컬에 user 메시지 즉시 추가
+    → POST /documents/{id}/ask (history는 백엔드가 DB에서 로드)
+    → AI 응답 + sources를 로컬 상태에 추가
+
+[세션 채팅]
+  사이드바에서 세션 선택 또는 새 세션 생성
+    → loadMessages() → GET /chat/messages/{sessionId}
+    → 입력창에 질문 → sendMessage() → 낙관적 업데이트
+    → POST /chat/ask → AI 응답(sources 포함) 추가
 
 
 ----------------------------------------------------------------
 8. 주요 외부 의존성
 ----------------------------------------------------------------
 
-  next                    : App Router, SSR/CSR 프레임워크
-  react                   : UI 컴포넌트 렌더링
+  next                    : App Router 프레임워크
+  react                   : UI 렌더링
   axios                   : HTTP 클라이언트
-  react-dropzone          : 파일 드래그&드롭 처리
+  react-dropzone          : 파일 드래그&드롭
   lucide-react            : 아이콘 라이브러리
-  tailwindcss             : 유틸리티 CSS 프레임워크
-  @tailwindcss/typography : Markdown prose 스타일 (AI 메시지 렌더링용)
-  react-markdown          : Markdown 텍스트 → React 컴포넌트 렌더링
-  remark-math             : Markdown 내 $...$ / $$...$$ 수식 파싱
-  rehype-katex            : 파싱된 수식을 KaTeX로 HTML 렌더링
-  katex                   : LaTeX 수식 렌더링 엔진 (CSS 포함)
+  tailwindcss             : 유틸리티 CSS
+  @tailwindcss/typography : Markdown prose 스타일
+  react-markdown          : Markdown → React 렌더링
+  remark-math             : $...$ / $$...$$ 수식 파싱
+  rehype-katex            : 파싱된 수식을 KaTeX로 렌더링
+  katex                   : LaTeX 수식 렌더링 엔진
