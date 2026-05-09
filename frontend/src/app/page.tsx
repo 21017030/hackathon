@@ -10,7 +10,7 @@ import UploadModal from '@/components/UploadModal';
 import { useAppData } from '@/hooks/useAppData';
 import { useChat } from '@/hooks/useChat';
 import { uploadDocument } from '@/api/documents';
-import { createCategory } from '@/api/categories';
+import { createCategory, deleteCategory } from '@/api/categories';
 import { createSession, deleteSession } from '@/api/chat';
 import type { ViewMode } from '@/types';
 
@@ -52,6 +52,21 @@ export default function App() {
       refresh();
     } catch {
       alert('폴더 생성에 실패했습니다.');
+    }
+  };
+
+  const handleDeleteFolder = async (id: number) => {
+    const docCount = documents.filter(d => d.category_id === id).length;
+    if (docCount > 0) {
+      alert(`폴더 안에 파일이 ${docCount}개 있습니다. 파일을 먼저 삭제해주세요.`);
+      return;
+    }
+    if (!confirm('폴더를 삭제하시겠습니까?')) return;
+    try {
+      await deleteCategory(id);
+      refresh();
+    } catch {
+      alert('폴더 삭제에 실패했습니다.');
     }
   };
 
@@ -136,6 +151,7 @@ export default function App() {
               onCategorySelect={setSelectedCategoryId}
               onStartChat={() => setViewMode('chat')}
               onCreateFolder={handleCreateFolder}
+              onDeleteFolder={handleDeleteFolder}
               onUpload={(categoryId) => openUploadModal(categoryId, false)}
             />
           ) : (

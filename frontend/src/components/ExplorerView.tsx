@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Folder, FileText, CheckCircle2, Clock3, Plus, Upload, X } from 'lucide-react';
+import { Folder, FileText, CheckCircle2, Clock3, Plus, Upload, X, Trash2 } from 'lucide-react';
 import type { Category, Document } from '@/types';
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   onStartChat: () => void;
   onCreateFolder: (name: string) => void;
   onUpload: (categoryId: number | null) => void;
+  onDeleteFolder: (id: number) => void;
 }
 
 function StatusBadge({ status }: { status: Document['parsing_status'] }) {
@@ -44,6 +45,7 @@ export default function ExplorerView({
   onStartChat,
   onCreateFolder,
   onUpload,
+  onDeleteFolder,
 }: Props) {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -131,13 +133,22 @@ export default function ExplorerView({
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={e => { e.stopPropagation(); onUpload(cat.id); }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-xl bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white shrink-0"
-                  title="파일 추가"
-                >
-                  <Upload size={15} />
-                </button>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 shrink-0">
+                  <button
+                    onClick={e => { e.stopPropagation(); onUpload(cat.id); }}
+                    className="p-2 rounded-xl bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white transition-colors"
+                    title="파일 추가"
+                  >
+                    <Upload size={15} />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); onDeleteFolder(cat.id); }}
+                    className="p-2 rounded-xl bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
+                    title="폴더 삭제"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
             ))}
             {categories.length === 0 && !isCreatingFolder && (
