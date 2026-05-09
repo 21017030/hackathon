@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, ChevronRight, X, FileText, LogOut, LogIn } from 'lucide-react';
+import { Upload, ChevronRight, X, FileText, LogOut, LogIn, User as UserIcon } from 'lucide-react';
 
 import Sidebar from '@/components/Sidebar';
 import ExplorerView from '@/components/ExplorerView';
@@ -265,12 +265,18 @@ export default function App() {
           <div className="flex items-center gap-3">
             {user ? (
               <>
-                <span className="text-sm text-gray-500">{user.name}</span>
                 <button
                   onClick={() => openUploadModal(selectedCategoryId)}
                   className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all shadow-sm"
                 >
                   <Upload size={16} /> 자료 업로드
+                </button>
+                <button
+                  onClick={() => window.location.href = '/mypage'}
+                  className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-indigo-600 text-sm font-semibold transition-colors"
+                  title="마이페이지"
+                >
+                  <UserIcon size={16} /> {user.name}
                 </button>
                 <button
                   onClick={() => { logout(); window.location.reload(); }}
@@ -294,6 +300,12 @@ export default function App() {
                   className="flex items-center gap-2 px-4 py-2 border border-indigo-600 text-indigo-600 rounded-lg text-sm font-bold hover:bg-indigo-50 transition-all"
                 >
                   <LogIn size={16} /> 로그인
+                </button>
+                <button
+                  onClick={() => window.location.href = '/register'}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all"
+                >
+                  회원가입
                 </button>
               </>
             )}

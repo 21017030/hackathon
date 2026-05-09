@@ -20,3 +20,16 @@ export async function register(
   });
   return res.data;
 }
+
+export async function checkLoginId(loginId: string): Promise<boolean> {
+  const res = await client.get('/auth/check-login-id', { params: { login_id: loginId } });
+  return res.data.available;
+}
+
+export async function updateUser(
+  userId: string,
+  data: { name?: string; password?: string },
+): Promise<User> {
+  const res = await client.put(`/auth/users/${userId}`, data);
+  return res.data;
+}

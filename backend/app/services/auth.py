@@ -1,5 +1,6 @@
 import logging
 import bcrypt
+from typing import Optional
 from fastapi import HTTPException
 
 from app.core.supabase import supabase
@@ -13,6 +14,11 @@ def _hash(password: str) -> str:
 
 def _verify(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
+
+
+def check_login_id_available(login_id: str) -> bool:
+    res = supabase.table("users").select("id").eq("login_id", login_id).execute()
+    return not bool(res.data)
 
 
 def register_user(student_id: str, login_id: str, password: str, name: str) -> dict:
@@ -46,3 +52,20 @@ def login_user(login_id: str, password: str) -> dict:
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
 
     return {"id": user["id"], "student_id": user["student_id"], "login_id": user["login_id"], "name": user["name"]}
+
+
+def update_user(user_id: str, name: Optional[str] = None, password: Optional[str] = None) -> dict:
+    updates: dict = {}
+    if name is not None:
+        updates["name"] = name
+    if password is not None:
+        updates["password"] = _hash(password)
+    if not updates:
+        raise HTTPException(status_code=400, detail="수정할 내용이 없습니다.")
+    try:
+        res = supabase.table("users").update(updates).eq("id", user_id).execute()
+        user = res.data[0]
+        return {"id": user["id"], "student_id": user["student_id"], "login_id": user["login_id"], "name": user["name"]}
+    except Exception as e:
+        logger.error("회원정보 수정 실패: %s", e)
+        raise HTTPException(status_code=500, detail="회원정보 수정 중 오류가 발생했습니다.")
