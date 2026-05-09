@@ -1,22 +1,21 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { User } from '@/types';
 
 const STORAGE_KEY = 'vibe_user';
 
-function loadUser(): User | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as User) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(loadUser);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) setUser(JSON.parse(raw) as User);
+    } catch {
+      // 파싱 실패 시 무시
+    }
+  }, []);
 
   const saveUser = useCallback((u: User) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
