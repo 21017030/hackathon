@@ -10,31 +10,18 @@ from app.services.document import CHAT_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSI
 logger = logging.getLogger(__name__)
 
 
-def _rewrite_query(content: str, history: list) -> str:
-    """대화 맥락을 반영해 모호한 팔로업 질문을 독립적인 검색 쿼리로 재작성."""
+def _enrich_query(content: str, history: list) -> str:
+    """마지막 AI 답변을 앞에 붙여 검색 쿼리에 대화 맥락을 반영 (추가 API 호출 없음)."""
     if not history:
         return content
-    recent = history[-4:]
-    history_str = "\n".join([
-        f"{'사용자' if m.get('sender_type') == 'USER' or m.get('sender') == 'user' else 'AI'}: {m.get('content', '')[:300]}"
-        for m in recent
-    ])
-    prompt = f"""아래 대화 내역을 참고하여 사용자의 질문을 문서 검색에 적합한 독립적인 쿼리로 변환하세요.
-변환된 쿼리만 한 줄로 출력하세요.
-
-대화 내역:
-{history_str}
-
-현재 질문: {content}
-
-검색 쿼리:"""
-    try:
-        response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
-        rewritten = (response.text or "").strip()
-        logger.info(f"쿼리 재작성: '{content}' → '{rewritten}'")
-        return rewritten or content
-    except Exception:
+    last_ai = next(
+        (m.get('content', '')[:300] for m in reversed(history)
+         if m.get('sender_type') == 'AI' or m.get('sender') == 'ai'),
+        ''
+    )
+    if not last_ai:
         return content
+    return f"{last_ai}\n{content}"
 
 
 async def get_relevant_chunks_with_sources(
@@ -130,8 +117,8 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
             .execute()
         history = history_res.data[::-1]
 
-        # 3. 쿼리 재작성 + 임베딩
-        search_query = _rewrite_query(content, history)
+        # 3. 쿼리 보강 + 임베딩
+        search_query = _enrich_query(content, history)
         logger.info(f"Generating embedding using {EMBEDDING_MODEL}")
         embedding_res = client.models.embed_content(
             model=EMBEDDING_MODEL,
@@ -190,8 +177,8 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
 
 
 async def ask_about_document(document_id: int, content: str, history: list = None) -> dict:
-    # 쿼리 재작성
-    search_query = _rewrite_query(content, history or [])
+    # 쿼리 보강
+    search_query = _enrich_query(content, history or [])
 
     embedding_res = client.models.embed_content(
         model=EMBEDDING_MODEL,
