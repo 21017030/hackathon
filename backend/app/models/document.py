@@ -11,7 +11,7 @@ class UploadResponse(BaseModel):
 
 class DocumentResponse(BaseModel):
     id: int
-    student_id: Optional[str]
+    user_id: Optional[str]
     category_id: Optional[int]
     original_file_name: str
     file_path: str
