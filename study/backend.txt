@@ -121,7 +121,8 @@ backend/
               - TXT  : UTF-8 디코딩
       Step 3. 1000자 단위로 텍스트 청킹
       Step 4. 각 청크를 Gemini embedding-001 모델로 임베딩 벡터 생성
-              (task_type="retrieval_document")
+              client.models.embed_content(config=EmbedContentConfig(task_type="retrieval_document"))
+              결과: embedding_res.embeddings[0].values
       Step 5. document_chunks 테이블에 (content, embedding, chunk_index) INSERT
       Step 6. documents 테이블 parsing_status를 'COMPLETED'로 업데이트
               (실패 시 'FAILED'로 업데이트)
@@ -143,11 +144,12 @@ backend/
       전체 RAG 질의응답 파이프라인:
       Step 1. 사용자 질문을 chat_messages 테이블에 'USER' 타입으로 INSERT
       Step 2. 질문을 Gemini embedding-001으로 벡터화
-              (task_type="retrieval_query")
+              client.models.embed_content(config=EmbedContentConfig(task_type="retrieval_query"))
       Step 3. get_relevant_chunks()로 관련 청크 3~5개 검색
       Step 4. chat_messages에서 최근 대화 5개 조회 (문맥 유지용)
       Step 5. [강의자료 내용] + [이전 대화] + [질문]을 조합해 프롬프트 구성
-      Step 6. Gemini 2.5-flash-lite 모델에 프롬프트 전달 → 답변 생성
+      Step 6. client.models.generate_content(model=CHAT_MODEL, contents=prompt)로 답변 생성
+              ※ client는 document.py에서 초기화 후 chat.py에서 import해서 재사용
       Step 7. AI 답변을 chat_messages에 'AI' 타입으로 INSERT 후 반환
 
 
@@ -209,7 +211,8 @@ backend/
 ----------------------------------------------------------------
 
   supabase         : DB 쿼리 + 스토리지 파일 관리
-  google-generativeai : 임베딩(embedding-001) + 채팅(gemini-2.5-flash-lite)
+  google-genai     : 임베딩(gemini-embedding-001) + 채팅(gemini-2.5-flash-lite)
+                     ※ 구버전 google-generativeai는 deprecated → google-genai로 교체
   pymupdf          : PDF 텍스트 추출
   python-pptx      : PPTX 텍스트 추출
   python-docx      : DOCX 텍스트 추출

@@ -1,0 +1,124 @@
+================================================================
+  VibeLRS 수정 이력
+================================================================
+
+----------------------------------------------------------------
+[수정 1] AI 답변에 수식·마크다운이 깨져서 표시되는 문제
+----------------------------------------------------------------
+
+문제:
+  AI가 LaTeX 수식($P(A) \ge 0$ 등)이나 볼드/**목록** 등 마크다운 형식으로
+  답변을 작성해도, ChatView에서 <p> 태그 plain text로만 렌더링되어
+  수식 기호가 그대로 노출됨.
+
+원인:
+  ChatView.tsx의 메시지 렌더링이 단순 <p> 태그여서 마크다운/LaTeX를
+  해석하는 처리가 전혀 없었음.
+
+수정 내용:
+  1. 패키지 설치
+     - react-markdown   : 마크다운 렌더링
+     - remark-math      : $...$ / $$...$$ 수식 구문 파싱
+     - rehype-katex     : 파싱된 수식을 KaTeX로 변환
+     - katex            : 수식 렌더링 엔진
+     - @tailwindcss/typography : prose 클래스로 마크다운 스타일링
+
+  2. layout.tsx
+     - "katex/dist/katex.min.css" import 추가 (수식 스타일시트)
+
+  3. globals.css
+     - @plugin "@tailwindcss/typography" 추가
+
+  4. ChatView.tsx
+     - USER 메시지: 기존 plain text 유지
+     - AI 메시지: <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+       로 교체하여 수식 + 마크다운 모두 렌더링
+
+수정 파일: frontend/src/app/layout.tsx
+           frontend/src/app/globals.css
+           frontend/src/components/ChatView.tsx
+           frontend/package.json
+
+
+----------------------------------------------------------------
+[수정 2] 파일 업로드 시 카테고리(폴더) 없이 올라가는 문제
+----------------------------------------------------------------
+
+문제:
+  헤더의 '자료 업로드' 버튼이 react-dropzone으로 바로 파일 선택창을
+  열어서, 폴더를 지정할 방법이 없었음.
+  보관함에서도 폴더를 새로 만들거나 특정 폴더에 파일을 추가하는 UI가 없었음.
+
+원인:
+  - 업로드 흐름이 파일 선택 즉시 시작되는 구조
+  - ExplorerView에 폴더 생성 기능 없음
+  - UploadModal은 로딩 오버레이 역할만 했음
+
+수정 내용:
+  1. UploadModal.tsx 재작성
+     - 업로드 다이얼로그로 변경 (폴더 선택 + 파일 드롭존)
+     - 폴더 선택: <select> 콤보박스 (폴더가 많아도 UI 크기 고정)
+       * 기본값 '폴더 없음', 기존 카테고리 목록 표시
+       * initialCategoryId prop으로 초기 선택값 주입 가능
+     - 파일 드롭존: 드래그&드롭 또는 클릭 선택
+     - 파일 선택 전 업로드 버튼 비활성화
+     - isUploading=true 시 로딩 오버레이로 전환 (기존 동작 유지)
+
+  2. ExplorerView.tsx 업데이트
+     - '새 폴더' 버튼 추가 → 클릭 시 인라인 입력폼으로 전환
+       (Enter 확인, Escape 취소)
+     - 폴더 카드 hover 시 업로드 아이콘 버튼 표시
+       → 해당 폴더 미리 선택된 채로 업로드 모달 열림
+     - 특정 폴더 안에 들어갔을 때 문서 목록 헤더에 '파일 추가' 버튼 표시
+     - onCreateFolder, onUpload prop 추가
+
+  3. page.tsx 업데이트
+     - useDropzone을 헤더 버튼에서 제거
+     - uploadModalOpen, uploadInitialCategoryId 상태 추가
+     - 헤더 '자료 업로드' 버튼 → openUploadModal(selectedCategoryId) 호출
+     - handleCreateFolder(name): createCategory API 호출 후 refresh
+     - handleUpload(file, categoryId): 모달 닫고 isUploading=true 후 업로드
+
+수정 파일: frontend/src/components/UploadModal.tsx
+           frontend/src/components/ExplorerView.tsx
+           frontend/src/app/page.tsx
+
+
+----------------------------------------------------------------
+[수정 3] google-generativeai deprecated 경고 및 패키지 교체
+----------------------------------------------------------------
+
+문제:
+  uvicorn 실행 시 아래 경고 발생:
+  "All support for the google.generativeai package has ended."
+  google-generativeai는 더 이상 업데이트·버그픽스가 없는 deprecated 패키지.
+
+원인:
+  document.py, chat.py에서 구버전 google-generativeai 패키지를 사용 중이었음.
+
+수정 내용:
+  1. requirements.txt
+     - google-generativeai → google-genai 교체
+
+  2. document.py
+     - import google.generativeai as genai
+       → from google import genai / from google.genai import types
+     - genai.configure(api_key=...) → genai.Client(api_key=...) 로 client 생성
+     - genai.embed_content(model, content, task_type, output_dimensionality)
+       → client.models.embed_content(
+             model, contents,
+             config=types.EmbedContentConfig(task_type, output_dimensionality)
+          )
+     - embedding_res['embedding'] → embedding_res.embeddings[0].values
+
+  3. chat.py
+     - import google.generativeai as genai 제거
+     - from google.genai import types 추가
+     - document.py의 client를 import해서 재사용 (중복 초기화 방지)
+     - genai.embed_content(...) → client.models.embed_content(...) (동일 패턴)
+     - genai.GenerativeModel(CHAT_MODEL).generate_content(prompt)
+       → client.models.generate_content(model=CHAT_MODEL, contents=prompt)
+
+수정 파일: backend/requirements.txt
+           backend/app/services/document.py
+           backend/app/services/chat.py
