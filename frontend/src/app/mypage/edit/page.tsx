@@ -8,11 +8,15 @@ import { NAME_REGEX } from '@/constants';
 import { getApiErrorDetail } from '@/utils/apiError';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 
+/**
+ * 사용자 정보 수정 페이지 컴포넌트.
+ * 아이디 중복확인 후 변경된 필드만 서버에 전송합니다.
+ */
 export default function EditProfilePage() {
   const router = useRouter();
   const user = useRequireAuth();
   const [form, setForm] = useState({ studentId: '', loginId: '', name: '' });
-  const [original, setOriginal] = useState({ studentId: '', loginId: '', name: '' });
+  const [original, setOriginal] = useState({ studentId: '', loginId: '', name: '' }); // 수정 전 원본 값
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loginIdStatus, setLoginIdStatus] = useState<'idle' | 'available' | 'taken' | 'same'>('same');
   const [checking, setChecking] = useState(false);
@@ -25,6 +29,7 @@ export default function EditProfilePage() {
     setOriginal(init);
   }, [user]);
 
+  /** 폼 필드 값을 업데이트하고 해당 필드의 에러를 초기화합니다. */
   const set = (field: string, value: string) => {
     setForm(f => ({ ...f, [field]: value }));
     setErrors(e => ({ ...e, [field]: '' }));
@@ -33,6 +38,7 @@ export default function EditProfilePage() {
     }
   };
 
+  /** 아이디 중복 여부를 서버에 확인합니다. 원본과 같으면 중복확인을 생략합니다. */
   const handleCheckLoginId = async () => {
     if (!form.loginId.trim()) {
       setErrors(e => ({ ...e, loginId: '아이디를 입력해주세요.' }));
@@ -54,11 +60,13 @@ export default function EditProfilePage() {
     }
   };
 
+  /** 원본 값과 비교해 변경된 필드가 있는지 확인합니다. */
   const hasChanged = () =>
     form.studentId.trim() !== original.studentId ||
     form.loginId.trim() !== original.loginId ||
     form.name.trim() !== original.name;
 
+  /** 전체 폼 유효성을 검사하고 에러 메시지를 설정합니다. */
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
@@ -80,6 +88,7 @@ export default function EditProfilePage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  /** 수정 폼 제출 핸들러. 변경된 필드만 서버에 전송합니다. */
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasChanged()) {

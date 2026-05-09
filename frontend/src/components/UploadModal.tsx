@@ -14,10 +14,16 @@ interface Props {
   onClose: () => void;
 }
 
+/**
+ * 파일 업로드 모달 컴포넌트.
+ * 드래그앤드롭 또는 클릭으로 PDF를 선택하고 폴더를 지정해 업로드합니다.
+ * uploadStatus가 있을 때는 업로드/분석 진행 상태 화면을 표시합니다.
+ */
 export default function UploadModal({ categories, initialCategoryId, showFolderSelect, uploadStatus, onUpload, onClose }: Props) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(initialCategoryId);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+  /** 드롭된 파일 중 첫 번째 파일을 선택 파일로 설정합니다. */
   const onDrop = useCallback((files: File[]) => {
     if (files[0]) setSelectedFile(files[0]);
   }, []);

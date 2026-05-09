@@ -17,13 +17,18 @@ interface Props {
   onClear: () => void;
 }
 
+/**
+ * 문서 뷰어 + 미니 채팅 패널 컴포넌트.
+ * 왼쪽에 PDF 뷰어(또는 텍스트), 오른쪽에 해당 문서 전용 채팅창을 표시합니다.
+ */
 export default function DocumentViewerPane({ documentId, messages, isAsking, onSend, onClear }: Props) {
   const [view, setView] = useState<DocumentView | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(true); // 우측 채팅 패널 펼침 여부
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // documentId가 바뀔 때마다 새 문서 데이터를 로드
   useEffect(() => {
     setIsLoading(true);
     setView(null);
@@ -32,10 +37,12 @@ export default function DocumentViewerPane({ documentId, messages, isAsking, onS
       .finally(() => setIsLoading(false));
   }, [documentId]);
 
+  // 새 메시지가 추가될 때 채팅창 하단으로 자동 스크롤
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isAsking]);
 
+  /** 채팅 입력창 전송 핸들러 */
   const handleSend = () => {
     if (!input.trim() || isAsking) return;
     onSend(input.trim());

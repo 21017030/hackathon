@@ -6,12 +6,17 @@ import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { updateUser } from '@/api/auth';
 import { useRequireAuth } from '@/hooks/useRequireAuth';
 
+/**
+ * 마이페이지 컴포넌트.
+ * 사용자 정보 확인, 정보 수정 페이지 이동, 비밀번호 변경 기능을 제공합니다.
+ */
 export default function MyPage() {
   const router = useRouter();
   const user = useRequireAuth();
   const [pwForm, setPwForm] = useState({ password: '', passwordConfirm: '', error: '', success: false });
   const [pwSaving, setPwSaving] = useState(false);
 
+  /** 비밀번호 변경 폼 제출 핸들러. 유효성 검사 후 API를 호출합니다. */
   const handlePwSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pwForm.password) {

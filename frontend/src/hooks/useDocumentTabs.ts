@@ -4,10 +4,14 @@ import { useState } from 'react';
 import { getDocumentChat, clearDocumentChat, askAboutDocument } from '@/api/documents';
 import type { OpenTab } from '@/types';
 
+/**
+ * 문서 뷰어 탭 목록과 각 탭의 채팅 상태를 관리하는 훅.
+ */
 export function useDocumentTabs() {
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
 
+  /** 문서 탭을 열고 이전 채팅 내역을 불러옵니다. 이미 열려있으면 활성화만 합니다. */
   const openTab = async (documentId: number, filename: string) => {
     setActiveTabId(documentId);
     setTabs(prev => {
@@ -22,6 +26,7 @@ export function useDocumentTabs() {
     }
   };
 
+  /** 탭을 닫습니다. 닫힌 탭이 활성 탭이면 이전 탭으로 포커스를 이동합니다. */
   const closeTab = (documentId: number) => {
     setTabs(prev => {
       const remaining = prev.filter(t => t.documentId !== documentId);
@@ -34,6 +39,7 @@ export function useDocumentTabs() {
     });
   };
 
+  /** 해당 탭의 채팅 내역을 서버에서도 삭제하고 초기화합니다. */
   const clearTab = async (documentId: number) => {
     if (!confirm('채팅 내역을 초기화하시겠습니까?')) return;
     try {
@@ -44,6 +50,7 @@ export function useDocumentTabs() {
     }
   };
 
+  /** 특정 탭에서 AI에게 질문을 보내고 답변을 메시지 목록에 추가합니다. */
   const askInTab = async (documentId: number, content: string) => {
     setTabs(prev => prev.map(t => t.documentId === documentId
       ? { ...t, messages: [...t.messages, { sender: 'user', content }], isAsking: true }

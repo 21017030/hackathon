@@ -6,6 +6,10 @@ import { checkLoginId, register } from '@/api/auth';
 import { STORAGE_KEY, NAME_REGEX } from '@/constants';
 import { getApiErrorDetail } from '@/utils/apiError';
 
+/**
+ * 회원가입 페이지 컴포넌트.
+ * 아이디 중복확인 후 회원가입을 진행하고, 성공 시 홈으로 이동합니다.
+ */
 export default function RegisterPage() {
   const router = useRouter();
 
@@ -21,12 +25,14 @@ export default function RegisterPage() {
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  /** 폼 필드 값을 업데이트하고 해당 필드의 에러를 초기화합니다. */
   const set = (field: string, value: string) => {
     setForm(f => ({ ...f, [field]: value }));
     setErrors(e => ({ ...e, [field]: '' }));
     if (field === 'loginId') setLoginIdStatus('idle');
   };
 
+  /** 아이디 중복 여부를 서버에 확인합니다. */
   const handleCheckLoginId = async () => {
     if (!form.loginId.trim()) {
       setErrors(e => ({ ...e, loginId: '아이디를 입력해주세요.' }));
@@ -44,6 +50,7 @@ export default function RegisterPage() {
     }
   };
 
+  /** 전체 폼 유효성을 검사하고 에러 메시지를 설정합니다. */
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
@@ -73,6 +80,7 @@ export default function RegisterPage() {
     return Object.keys(newErrors).length === 0;
   };
 
+  /** 회원가입 폼 제출 핸들러. 성공 시 사용자 정보를 저장하고 홈으로 이동합니다. */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;

@@ -12,6 +12,7 @@ interface Props {
   onViewDocument: (id: number, filename: string) => void;
 }
 
+/** 문서 분석 상태(COMPLETED/FAILED/PENDING)를 뱃지로 표시하는 컴포넌트 */
 function StatusBadge({ status }: { status: Document['parsing_status'] }) {
   if (status === 'COMPLETED') {
     return (
@@ -34,6 +35,7 @@ function StatusBadge({ status }: { status: Document['parsing_status'] }) {
   );
 }
 
+/** 선택된 카테고리 내 문서 목록을 테이블로 표시하는 컴포넌트 */
 export default function DocumentTable({
   documents,
   categories,

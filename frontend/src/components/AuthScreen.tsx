@@ -10,11 +10,16 @@ interface Props {
   onClose?: () => void;
 }
 
+/**
+ * 로그인 화면 컴포넌트.
+ * onClose가 있으면 모달로, 없으면 전체 화면으로 표시됩니다.
+ */
 export default function AuthScreen({ onSuccess, onClose }: Props) {
   const [form, setForm] = useState({ loginId: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  /** 로그인 폼 제출 핸들러 */
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -29,6 +34,7 @@ export default function AuthScreen({ onSuccess, onClose }: Props) {
     }
   };
 
+  // 로그인 카드 UI (모달/전체화면 공통으로 재사용)
   const card = (
     <div className="bg-white rounded-2xl shadow-lg w-full max-w-sm p-8 relative">
       {onClose && (

@@ -17,6 +17,10 @@ interface Props {
   onViewDocument: (id: number, filename: string) => void;
 }
 
+/**
+ * 보관함 탐색기 컴포넌트.
+ * 폴더 그리드와 문서 테이블을 조합하여 파일 탐색기 형태로 보여줍니다.
+ */
 export default function ExplorerView({
   categories,
   documents,
@@ -28,6 +32,7 @@ export default function ExplorerView({
   onDeleteDocument,
   onViewDocument,
 }: Props) {
+  // 폴더가 선택된 경우 해당 폴더 문서만, 아니면 전체 문서를 표시
   const visibleDocs = selectedCategoryId === null
     ? documents
     : documents.filter(d => d.category_id === selectedCategoryId);

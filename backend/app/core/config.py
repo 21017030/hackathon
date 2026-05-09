@@ -1,3 +1,5 @@
+# 환경변수 기반 애플리케이션 설정
+# .env 파일에서 값을 읽어 전역 상수로 노출합니다.
 import os
 from dotenv import load_dotenv
 

@@ -19,6 +19,10 @@ interface Props {
   onNewSession: (title: string) => void;
 }
 
+/**
+ * 왼쪽 사이드바 컴포넌트.
+ * 프로필, 새 대화 버튼, 카테고리 목록, 최근 채팅 세션 목록을 표시합니다.
+ */
 export default function Sidebar({
   userName,
   userStudentId,
@@ -33,10 +37,11 @@ export default function Sidebar({
   onHomeClick,
   onNewSession,
 }: Props) {
-  const [isCategoriesExpanded, setIsCategoriesExpanded] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+  const [isCategoriesExpanded, setIsCategoriesExpanded] = useState(false); // 카테고리 목록 펼침 여부
+  const [isCreating, setIsCreating] = useState(false); // 새 대화 제목 입력창 표시 여부
   const [newTitle, setNewTitle] = useState('');
 
+  /** 입력된 제목으로 새 채팅 세션을 생성합니다. 제목이 없으면 기본값을 사용합니다. */
   const handleCreate = () => {
     const title = newTitle.trim() || '새로운 학습 대화';
     onNewSession(title);

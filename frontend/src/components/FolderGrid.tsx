@@ -13,6 +13,7 @@ interface Props {
   onDeleteFolder: (id: number) => void;
 }
 
+/** 카테고리(폴더) 목록을 그리드로 표시하고 생성/삭제/파일 추가를 지원하는 컴포넌트 */
 export default function FolderGrid({
   categories,
   documents,
@@ -24,6 +25,7 @@ export default function FolderGrid({
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
 
+  /** 입력된 이름으로 폴더를 생성하고 입력창을 닫습니다. */
   const handleCreate = () => {
     const name = newName.trim();
     if (!name) return;

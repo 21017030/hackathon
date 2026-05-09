@@ -1,11 +1,13 @@
+# Gemini AI 클라이언트 및 모델/파라미터 설정
+# 모델명과 RAG 동작 상수를 한 곳에서 관리합니다.
 from google import genai
 from app.core.config import GEMINI_API_KEY
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-CHAT_MODEL = "gemini-3.1-flash-lite"
-REWRITE_MODEL = "gemini-3.1-flash-lite"
-EMBEDDING_MODEL = "gemini-embedding-001"
+CHAT_MODEL = "gemini-3.1-flash-lite"      # 채팅 답변 생성에 사용하는 모델
+REWRITE_MODEL = "gemini-3.1-flash-lite"   # 팔로업 쿼리 재작성에 사용하는 모델
+EMBEDDING_MODEL = "gemini-embedding-001"  # 텍스트 → 벡터 변환 모델
 EMBEDDING_DIMENSIONS = 1536  # pgvector HNSW 인덱스 호환 (최대 2000차원)
 
 CHUNK_SIZE = 1000            # RAG 인제스션 청크 크기 (문자 수)
