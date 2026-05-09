@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, Folder, CheckCircle2 } from 'lucide-react';
+import { Upload, X, Folder, CheckCircle2, ChevronDown } from 'lucide-react';
 import type { Category } from '@/types';
 
 interface Props {
@@ -52,30 +52,21 @@ export default function UploadModal({ categories, initialCategoryId, isUploading
         </div>
 
         <div className="mb-6">
-          <p className="text-sm font-bold text-gray-600 mb-3">폴더 선택</p>
-          {categories.length === 0 ? (
-            <p className="text-sm text-gray-400 py-4 text-center border border-dashed border-gray-200 rounded-xl">
-              폴더가 없습니다. 보관함에서 먼저 폴더를 만들어주세요.
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
+          <p className="text-sm font-bold text-gray-600 mb-2">폴더 선택</p>
+          <div className="relative">
+            <Folder size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <select
+              value={selectedCategoryId ?? ''}
+              onChange={e => setSelectedCategoryId(e.target.value ? Number(e.target.value) : null)}
+              className="w-full appearance-none pl-9 pr-9 py-3 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all"
+            >
+              <option value="">폴더 없음</option>
               {categories.map(cat => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategoryId(prev => prev === cat.id ? null : cat.id)}
-                  className={`flex items-center gap-2 p-3 rounded-xl border text-left text-sm transition-all ${
-                    selectedCategoryId === cat.id
-                      ? 'border-indigo-400 bg-indigo-50 text-indigo-700 font-bold'
-                      : 'border-gray-200 hover:border-indigo-200 hover:bg-gray-50 text-gray-600'
-                  }`}
-                >
-                  <Folder size={15} className={selectedCategoryId === cat.id ? 'text-indigo-500 shrink-0' : 'text-gray-400 shrink-0'} />
-                  <span className="truncate">{cat.name}</span>
-                  {selectedCategoryId === cat.id && <CheckCircle2 size={14} className="ml-auto shrink-0 text-indigo-500" />}
-                </button>
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
-            </div>
-          )}
+            </select>
+            <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
         </div>
 
         <div
