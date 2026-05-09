@@ -107,6 +107,34 @@ export default function Sidebar({
       </div>
 
       <div className="flex-1 px-6 overflow-y-auto space-y-8">
+        <div className="pb-4">
+          <button
+            onClick={() => setIsCategoriesExpanded(v => !v)}
+            className="w-full flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-3 hover:text-gray-600 transition-colors"
+          >
+            <span>Categories</span>
+            <ChevronDown size={14} className={`transition-transform duration-200 ${isCategoriesExpanded ? 'rotate-180' : ''}`} />
+          </button>
+          {isCategoriesExpanded && (
+            <div className="space-y-1">
+              {categories.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => onCategoryClick(cat.id)}
+                  className={`w-full text-left text-sm py-2 px-3 rounded-lg transition-colors flex items-center gap-2 ${
+                    selectedCategoryId === cat.id
+                      ? 'text-indigo-600 font-bold bg-indigo-50'
+                      : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Folder size={14} className={selectedCategoryId === cat.id ? 'text-indigo-500' : 'text-gray-400'} />
+                  <span className="truncate">{cat.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div>
           <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-3">Recent Chats</h3>
           <div className="space-y-1">
@@ -138,34 +166,6 @@ export default function Sidebar({
               <p className="text-[10px] text-gray-400 px-3 italic">대화 내역이 없습니다.</p>
             )}
           </div>
-        </div>
-
-        <div className="pb-4">
-          <button
-            onClick={() => setIsCategoriesExpanded(v => !v)}
-            className="w-full flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-3 hover:text-gray-600 transition-colors"
-          >
-            <span>Categories</span>
-            <ChevronDown size={14} className={`transition-transform duration-200 ${isCategoriesExpanded ? 'rotate-180' : ''}`} />
-          </button>
-          {isCategoriesExpanded && (
-            <div className="space-y-1">
-              {categories.map(cat => (
-                <button
-                  key={cat.id}
-                  onClick={() => onCategoryClick(cat.id)}
-                  className={`w-full text-left text-sm py-2 px-3 rounded-lg transition-colors flex items-center gap-2 ${
-                    selectedCategoryId === cat.id
-                      ? 'text-indigo-600 font-bold bg-indigo-50'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <Folder size={14} className={selectedCategoryId === cat.id ? 'text-indigo-500' : 'text-gray-400'} />
-                  <span className="truncate">{cat.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
