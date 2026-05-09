@@ -5,7 +5,9 @@ import { Plus, MessageSquare, Folder, User, HardDrive, ChevronDown, Trash2 } fro
 import type { Category, ChatSession, ViewMode } from '@/types';
 
 interface Props {
-  studentId: string;
+  userId: string;
+  userName: string;
+  userStudentId: string;
   sessions: ChatSession[];
   categories: Category[];
   currentSessionId: number | null;
@@ -19,7 +21,9 @@ interface Props {
 }
 
 export default function Sidebar({
-  studentId,
+  userId: _userId,
+  userName,
+  userStudentId,
   sessions,
   categories,
   currentSessionId,
@@ -175,8 +179,8 @@ export default function Sidebar({
             <User size={16} />
           </div>
           <div className="flex-1 overflow-hidden">
-            <p className="text-xs font-bold truncate text-indigo-900">학생</p>
-            <p className="text-[10px] text-gray-500">{studentId}</p>
+            <p className="text-xs font-bold truncate text-indigo-900">{userName}</p>
+            <p className="text-[10px] text-gray-500">{userStudentId}</p>
           </div>
         </div>
       </div>

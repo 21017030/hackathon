@@ -3,12 +3,12 @@ from typing import List, Optional
 from datetime import datetime
 
 class ChatSessionCreate(BaseModel):
-    student_id: str
+    user_id: str
     title: str
 
 class ChatSessionResponse(BaseModel):
     id: int
-    student_id: str
+    user_id: str
     title: str
     created_at: datetime
 

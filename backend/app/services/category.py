@@ -6,10 +6,10 @@ from app.core.supabase import supabase
 logger = logging.getLogger(__name__)
 
 
-def create_category(student_id: str, name: str) -> dict:
+def create_category(user_id: str, name: str) -> dict:
     try:
         res = supabase.table("categories").insert({
-            "student_id": student_id,
+            "user_id": user_id,
             "name": name,
         }).execute()
         return res.data[0]
@@ -18,8 +18,8 @@ def create_category(student_id: str, name: str) -> dict:
         raise HTTPException(status_code=500, detail="카테고리 생성 중 오류가 발생했습니다.")
 
 
-def get_categories(student_id: str) -> list:
-    res = supabase.table("categories").select("*").eq("student_id", student_id).order("created_at", desc=False).execute()
+def get_categories(user_id: str) -> list:
+    res = supabase.table("categories").select("*").eq("user_id", user_id).order("created_at", desc=False).execute()
     return res.data
 
 

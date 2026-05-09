@@ -88,7 +88,7 @@ def _extract_pdf_gemini(file_bytes: bytes, filename: str) -> str:
                 pass
 
 
-def upload_document(original_name: str, contents: bytes, ext: str, student_id: str = None, category_id: int = None) -> int:
+def upload_document(original_name: str, contents: bytes, ext: str, user_id: str = None, category_id: int = None) -> int:
     file_path = f"{uuid.uuid4()}{ext}"
 
     try:
@@ -100,7 +100,7 @@ def upload_document(original_name: str, contents: bytes, ext: str, student_id: s
 
     try:
         res = supabase.table("documents").insert({
-            "student_id": student_id,
+            "user_id": user_id,
             "category_id": category_id,
             "original_file_name": original_name,
             "file_path": file_path,
@@ -222,8 +222,8 @@ def get_document_view(document_id: int) -> dict:
     }
 
 
-def get_documents_by_student(student_id: str) -> list:
-    res = supabase.table("documents").select("*").eq("student_id", student_id).order("created_at", desc=True).execute()
+def get_documents_by_user(user_id: str) -> list:
+    res = supabase.table("documents").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
     return res.data
 
 

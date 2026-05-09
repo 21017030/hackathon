@@ -14,6 +14,7 @@ class LoginRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
+    id: str
     student_id: str
     login_id: str
     name: str

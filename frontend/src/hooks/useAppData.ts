@@ -6,7 +6,7 @@ import { getDocuments } from '@/api/documents';
 import { getSessions } from '@/api/chat';
 import type { Category, Document, ChatSession } from '@/types';
 
-export function useAppData(studentId: string) {
+export function useAppData(userId: string) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -22,9 +22,9 @@ export function useAppData(studentId: string) {
     pendingRefresh.current = false;
     try {
       const [cats, docs, sess] = await Promise.allSettled([
-        getCategories(studentId),
-        getDocuments(studentId),
-        getSessions(studentId),
+        getCategories(userId),
+        getDocuments(userId),
+        getSessions(userId),
       ]);
       if (cats.status === 'fulfilled') setCategories(cats.value);
       if (docs.status === 'fulfilled') setDocuments(docs.value);
@@ -33,7 +33,7 @@ export function useAppData(studentId: string) {
       isRefreshing.current = false;
       if (pendingRefresh.current) refresh();
     }
-  }, [studentId]);
+  }, [userId]);
 
   useEffect(() => {
     refresh();

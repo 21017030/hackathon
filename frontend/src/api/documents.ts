@@ -1,19 +1,19 @@
 import client from './client';
 import type { Document, SimpleMessage, Source } from '@/types';
 
-export async function getDocuments(studentId: string): Promise<Document[]> {
-  const res = await client.get(`/documents/student/${studentId}`);
+export async function getDocuments(userId: string): Promise<Document[]> {
+  const res = await client.get(`/documents/user/${userId}`);
   return res.data;
 }
 
 export async function uploadDocument(
   file: File,
-  studentId: string,
+  userId: string,
   categoryId: number | null,
 ): Promise<{ documentId: number }> {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('student_id', studentId);
+  formData.append('user_id', userId);
   if (categoryId !== null) formData.append('category_id', categoryId.toString());
   const res = await client.post('/documents/upload', formData);
   return { documentId: res.data.document_id };

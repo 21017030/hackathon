@@ -1,3 +1,10 @@
+export interface User {
+  id: string;
+  student_id: string;
+  login_id: string;
+  name: string;
+}
+
 export interface Category {
   id: number;
   name: string;

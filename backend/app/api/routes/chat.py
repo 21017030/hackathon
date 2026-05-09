@@ -11,16 +11,16 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 async def create_session(request: ChatSessionCreate):
     try:
         res = supabase.table("chat_sessions").insert({
-            "student_id": request.student_id,
+            "user_id": request.user_id,
             "title": request.title
         }).execute()
         return res.data[0]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/sessions/{student_id}", response_model=List[ChatSessionResponse])
-async def get_sessions(student_id: str):
-    res = supabase.table("chat_sessions").select("*").eq("student_id", student_id).order("created_at", desc=True).execute()
+@router.get("/sessions/{user_id}", response_model=List[ChatSessionResponse])
+async def get_sessions(user_id: str):
+    res = supabase.table("chat_sessions").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
     return res.data
 
 @router.post("/ask")

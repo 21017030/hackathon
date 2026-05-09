@@ -1,13 +1,13 @@
 import client from './client';
 import type { Category } from '@/types';
 
-export async function getCategories(studentId: string): Promise<Category[]> {
-  const res = await client.get(`/categories/${studentId}`);
+export async function getCategories(userId: string): Promise<Category[]> {
+  const res = await client.get(`/categories/${userId}`);
   return res.data;
 }
 
-export async function createCategory(studentId: string, name: string): Promise<Category> {
-  const res = await client.post('/categories', { student_id: studentId, name });
+export async function createCategory(userId: string, name: string): Promise<Category> {
+  const res = await client.post('/categories', { user_id: userId, name });
   return res.data;
 }
 

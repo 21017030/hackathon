@@ -9,12 +9,12 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 
 @router.post("", response_model=CategoryResponse, status_code=201)
 def create(request: CategoryCreate):
-    return create_category(student_id=request.student_id, name=request.name)
+    return create_category(user_id=request.user_id, name=request.name)
 
 
-@router.get("/{student_id}", response_model=List[CategoryResponse])
-def list_categories(student_id: str):
-    return get_categories(student_id)
+@router.get("/{user_id}", response_model=List[CategoryResponse])
+def list_categories(user_id: str):
+    return get_categories(user_id)
 
 
 @router.delete("/{category_id}", status_code=204)

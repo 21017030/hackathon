@@ -102,7 +102,7 @@ backend/
 
 [document.py]
   사용 모델:
-    CHAT_MODEL      = "gemini-2.5-flash"       (PDF 내용 추출 + 채팅 답변)
+    CHAT_MODEL      = "gemini-3.1-flash-lite"  (PDF 내용 추출 + 채팅 답변)
     REWRITE_MODEL   = "gemini-3.1-flash-lite"  (쿼리 재작성 전용 경량 모델)
     EMBEDDING_MODEL = "gemini-embedding-001"   (벡터 임베딩)
     EMBEDDING_DIMENSIONS = 1536               (pgvector HNSW 인덱스 호환)
@@ -188,7 +188,8 @@ backend/
       Step 5. get_relevant_chunks_with_sources()로 관련 청크 최대 6개 검색
       Step 6. 프롬프트 구성: [강의자료 내용] + [이전 대화] + [질문]
               AI에게 사용한 파일명을 [참고자료: ...] 형식으로 명시하도록 지시
-      Step 7. gemini-2.5-flash로 답변 생성
+              페이지 번호 질문 시 청크의 [N페이지] 마커를 참고하도록 지시
+      Step 7. gemini-3.1-flash-lite로 답변 생성
       Step 8. _filter_used_sources()로 실제 참고 자료만 추출
       Step 9. sources를 JSONB로 포함해 chat_messages에 'AI' 타입으로 INSERT
       Step 10. {"message": ..., "sources": [...]} 반환
@@ -200,10 +201,9 @@ backend/
       Step 3. _rewrite_query()로 팔로업 질문 변환
       Step 4. gemini-embedding-001로 벡터화
       Step 5. get_relevant_chunks_with_sources()로 해당 문서 청크만 검색
-      Step 6. 프롬프트 구성 + gemini-2.5-flash로 답변 생성
-      Step 7. _filter_used_sources()로 출처 필터링
-      Step 8. AI 답변을 sources와 함께 document_chat_messages에 INSERT
-      Step 9. {"answer": ..., "sources": [...]} 반환
+      Step 6. 프롬프트 구성 + gemini-3.1-flash-lite로 답변 생성
+      Step 7. AI 답변만 document_chat_messages에 INSERT (sources 미저장)
+      Step 8. {"answer": ..., "sources": []} 반환 (미니 챗은 출처 표시 없음)
 
   (3) delete_session(session_id)
       - chat_messages 먼저 삭제 후 chat_sessions 삭제 (FK 제약 순서 준수)
@@ -271,7 +271,8 @@ chat_messages
 
 document_chat_messages
   id (PK), document_id (FK→documents ON DELETE CASCADE),
-  sender_type, content, sources (JSONB, default []), created_at
+  sender_type, content, created_at
+  ※ 출처(sources)는 저장하지 않음 (보고 있는 문서가 곧 출처이므로)
 
 
 ----------------------------------------------------------------
@@ -294,7 +295,7 @@ document_chat_messages
     → 최근 대화 6개 조회 → 쿼리 재작성 (gemini-3.1-flash-lite)
     → 재작성된 쿼리 벡터화 (gemini-embedding-001)
     → 유사 청크 검색 (pgvector, 유사도 >= 0.5)
-    → 프롬프트 조합 → gemini-2.5-flash 답변 생성
+    → 프롬프트 조합 → gemini-3.1-flash-lite 답변 생성
     → 출처 필터링 → AI 답변 + sources DB 저장
     → 클라이언트에 반환
 
@@ -303,8 +304,8 @@ document_chat_messages
     → 질문 document_chat_messages에 저장 (USER)
     → 최근 대화 6개 DB에서 로드 → 쿼리 재작성
     → 벡터화 → 해당 문서 청크만 검색
-    → 프롬프트 조합 → gemini-2.5-flash 답변 생성
-    → 출처 필터링 → AI 답변 + sources DB 저장
+    → 프롬프트 조합 → gemini-3.1-flash-lite 답변 생성
+    → AI 답변만 DB 저장 (sources 미저장)
     → 클라이언트에 반환
 
 
@@ -313,7 +314,7 @@ document_chat_messages
 ----------------------------------------------------------------
 
   supabase         : DB 쿼리 + 스토리지 파일 관리
-  google-genai     : 임베딩(gemini-embedding-001) + 채팅(gemini-2.5-flash)
+  google-genai     : 임베딩(gemini-embedding-001) + 채팅(gemini-3.1-flash-lite)
                      + 쿼리 재작성(gemini-3.1-flash-lite) + PDF 추출(Files API)
                      ※ 구버전 google-generativeai는 deprecated → google-genai로 교체
   pymupdf (fitz)   : PDF 텍스트 추출 폴백

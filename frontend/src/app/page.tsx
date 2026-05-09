@@ -1,23 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, ChevronRight, X, FileText } from 'lucide-react';
+import { Upload, ChevronRight, X, FileText, LogOut } from 'lucide-react';
 
 import Sidebar from '@/components/Sidebar';
 import ExplorerView from '@/components/ExplorerView';
 import ChatView from '@/components/ChatView';
 import UploadModal from '@/components/UploadModal';
 import DocumentViewerPane from '@/components/DocumentViewerPane';
+import AuthScreen from '@/components/AuthScreen';
 import { useAppData } from '@/hooks/useAppData';
+import { useAuth } from '@/hooks/useAuth';
 import { useChat } from '@/hooks/useChat';
 import { uploadDocument, deleteDocument, askAboutDocument, getDocuments, getDocumentChat, clearDocumentChat } from '@/api/documents';
 import { createCategory, deleteCategory } from '@/api/categories';
 import { createSession, deleteSession } from '@/api/chat';
 import type { ViewMode, OpenTab } from '@/types';
 
-const STUDENT_ID = '20230001';
-
 export default function App() {
+  const { user, saveUser, logout } = useAuth();
+
   const [viewMode, setViewMode] = useState<ViewMode>('explorer');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [uploadStatus, setUploadStatus] = useState<'uploading' | 'analyzing' | null>(null);
@@ -29,8 +31,13 @@ export default function App() {
   const [tabs, setTabs] = useState<OpenTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
 
-  const { categories, documents, sessions, setSessions, refresh } = useAppData(STUDENT_ID);
+  const userId = user?.id ?? '';
+  const { categories, documents, sessions, setSessions, refresh } = useAppData(userId);
   const { messages, currentSessionId, setCurrentSessionId, sendMessage, isAsking, loadMessages } = useChat();
+
+  if (!user) {
+    return <AuthScreen onSuccess={saveUser} />;
+  }
 
   // ── 문서 탭 관리 ──────────────────────────────────────────
   const openDocumentTab = async (documentId: number, filename: string) => {
@@ -101,7 +108,7 @@ export default function App() {
       const start = Date.now();
       const check = async () => {
         if (Date.now() - start > MAX_WAIT) { reject(new Error('시간 초과')); return; }
-        const docs = await getDocuments(STUDENT_ID);
+        const docs = await getDocuments(userId);
         const doc = docs.find(d => d.id === documentId);
         if (doc?.parsing_status === 'COMPLETED') resolve();
         else if (doc?.parsing_status === 'FAILED') reject(new Error('분석 실패'));
@@ -114,7 +121,7 @@ export default function App() {
     setUploadModalOpen(false);
     setUploadStatus('uploading');
     try {
-      const { documentId } = await uploadDocument(file, STUDENT_ID, categoryId);
+      const { documentId } = await uploadDocument(file, userId, categoryId);
       setUploadStatus('analyzing');
       refresh();
       await pollDocumentStatus(documentId);
@@ -129,7 +136,7 @@ export default function App() {
   // ── 폴더 / 문서 ──────────────────────────────────────────
   const handleCreateFolder = async (name: string) => {
     try {
-      await createCategory(STUDENT_ID, name);
+      await createCategory(userId, name);
       refresh();
     } catch {
       alert('폴더 생성에 실패했습니다.');
@@ -173,7 +180,7 @@ export default function App() {
 
   const handleNewSession = async (title: string) => {
     try {
-      const session = await createSession(STUDENT_ID, title);
+      const session = await createSession(userId, title);
       setSessions(prev => [session, ...prev]);
       handleSessionClick(session.id);
     } catch {
@@ -220,7 +227,9 @@ export default function App() {
   return (
     <div className="flex h-screen bg-[#F8F9FB] text-gray-800 font-sans">
       <Sidebar
-        studentId={STUDENT_ID}
+        userId={userId}
+        userName={user.name}
+        userStudentId={user.student_id}
         sessions={sessions}
         categories={categories}
         currentSessionId={currentSessionId}
@@ -243,12 +252,22 @@ export default function App() {
             <ChevronRight size={14} className="text-gray-300" />
             <span className="font-bold text-gray-700 max-w-xs truncate">{breadcrumb}</span>
           </div>
-          <button
-            onClick={() => openUploadModal(selectedCategoryId)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all shadow-sm"
-          >
-            <Upload size={16} /> 자료 업로드
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-500">{user.name}</span>
+            <button
+              onClick={() => openUploadModal(selectedCategoryId)}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all shadow-sm"
+            >
+              <Upload size={16} /> 자료 업로드
+            </button>
+            <button
+              onClick={logout}
+              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              title="로그아웃"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
         </header>
 
         {/* 탭 바 */}

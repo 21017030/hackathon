@@ -193,7 +193,7 @@ frontend/src/
       * 헤더: 접기 버튼 + 'AI에게 물어보기' 타이틀
               대화 내역이 있을 때 우측에 초기화(휴지통) 버튼 표시
       * 메시지 목록: user(인디고 말풍선) / ai(회색 말풍선)
-                     AI 메시지는 ReactMarkdown 렌더링 + 출처 표시
+                     AI 메시지는 ReactMarkdown 렌더링 (출처 표시 없음)
       * 입력창: Enter 전송, Shift+Enter 줄바꿈
     - 탭 열 때 DB에서 이전 대화 내역 자동 로드
     - 초기화 버튼 클릭 → confirm 후 DB + 로컬 상태 모두 삭제

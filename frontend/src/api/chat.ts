@@ -1,13 +1,13 @@
 import client from './client';
 import type { ChatSession, Message } from '@/types';
 
-export async function getSessions(studentId: string): Promise<ChatSession[]> {
-  const res = await client.get(`/chat/sessions/${studentId}`);
+export async function getSessions(userId: string): Promise<ChatSession[]> {
+  const res = await client.get(`/chat/sessions/${userId}`);
   return res.data;
 }
 
-export async function createSession(studentId: string, title: string): Promise<ChatSession> {
-  const res = await client.post('/chat/session', { student_id: studentId, title });
+export async function createSession(userId: string, title: string): Promise<ChatSession> {
+  const res = await client.post('/chat/session', { user_id: userId, title });
   return res.data;
 }
 

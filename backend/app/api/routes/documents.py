@@ -7,7 +7,7 @@ from app.core.config import MAX_FILE_SIZE
 from app.models.document import UploadResponse, DocumentResponse
 from app.services.document import (
     validate_file, upload_document, process_document_rag,
-    get_documents_by_student, get_documents_by_category, delete_document,
+    get_documents_by_user, get_documents_by_category, delete_document,
     get_document_view,
 )
 from app.services.chat import ask_about_document
@@ -21,7 +21,7 @@ async def upload_file(
     background_tasks: BackgroundTasks,
     request: Request,
     file: UploadFile = File(...),
-    student_id: str = Form(None),
+    user_id: str = Form(None),
     category_id: int = Form(None),
 ):
     content_length = request.headers.get("content-length")
@@ -36,7 +36,7 @@ async def upload_file(
         await file.close()
 
     ext = validate_file(original_name, contents)
-    document_id = upload_document(original_name, contents, ext, student_id, category_id)
+    document_id = upload_document(original_name, contents, ext, user_id, category_id)
     background_tasks.add_task(process_document_rag, document_id)
 
     return UploadResponse(
@@ -46,9 +46,9 @@ async def upload_file(
     )
 
 
-@router.get("/student/{student_id}", response_model=List[DocumentResponse])
-def list_by_student(student_id: str):
-    return get_documents_by_student(student_id)
+@router.get("/user/{user_id}", response_model=List[DocumentResponse])
+def list_by_user(user_id: str):
+    return get_documents_by_user(user_id)
 
 
 @router.get("/category/{category_id}", response_model=List[DocumentResponse])

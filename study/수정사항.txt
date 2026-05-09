@@ -211,3 +211,57 @@
     (문서를 열면 미니 챗으로 바로 질문 가능하므로 중복)
 
 수정 파일: Sidebar.tsx, ExplorerView.tsx
+
+
+----------------------------------------------------------------
+[수정 12] CHAT_MODEL 변경 — API 한도 초과로 경량 모델 교체
+----------------------------------------------------------------
+
+배경:
+  gemini-2.5-flash의 API 사용 한도가 소진되어 답변 생성이 불가능해짐.
+
+수정 내용:
+  - document.py: CHAT_MODEL = "gemini-2.5-flash" → "gemini-3.1-flash-lite"
+    (REWRITE_MODEL과 동일한 모델로 통일)
+  ※ 한도가 복구되면 CHAT_MODEL만 다시 gemini-2.5-flash로 되돌리면 됨
+
+수정 파일: services/document.py
+
+
+----------------------------------------------------------------
+[수정 13] 미니 챗 출처 표시 제거 및 페이지 번호 프롬프트 추가
+----------------------------------------------------------------
+
+배경 및 수정 내용:
+  (1) 미니 챗 출처 제거
+    - 문서 미니 챗은 열어 보고 있는 문서 자체가 출처이므로 별도 출처 표시가 불필요.
+    - ask_about_document(): AI 답변 저장 시 sources 컬럼을 기록하지 않음
+    - 반환값: {"answer": ..., "sources": []} (항상 빈 배열)
+    - DocumentViewerPane.tsx: AI 메시지 하단 출처 배지 표시 제거
+
+  (2) 페이지 번호 프롬프트 추가 (세션 채팅)
+    - 사용자가 "몇 페이지에 있어?" 등을 물었을 때 AI가 답하지 못하는 문제.
+    - ask_question() 프롬프트에 "페이지를 묻는 질문이라면 강의자료의
+      [N페이지] 마커를 참고하여 알려주세요" 지시 추가.
+
+수정 파일: chat.py, DocumentViewerPane.tsx
+
+
+----------------------------------------------------------------
+[수정 14] ask_about_document KeyError 수정
+----------------------------------------------------------------
+
+문제:
+  POST /documents/{id}/ask 호출 시 500 오류 발생.
+  스택 트레이스: KeyError: 'category' in _build_context()
+
+원인:
+  ask_about_document()가 get_relevant_chunks()를 호출하고 있었음.
+  이 함수는 raw 청크(content, document_id 등)만 반환하며,
+  _build_context()가 필요로 하는 filename, category, page 키가 없었음.
+
+수정 내용:
+  - ask_about_document(): get_relevant_chunks() → get_relevant_chunks_with_sources()
+    (documents + categories 테이블 조인하여 출처 메타데이터 보강)
+
+수정 파일: services/chat.py
