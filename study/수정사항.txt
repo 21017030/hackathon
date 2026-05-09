@@ -569,10 +569,19 @@
    앱 외부 → 앱 재진입 경로는 별개의 bfcache 문제였음)
 
 수정 내용:
-  - BfcacheGuard.tsx 신규 생성
-    * pageshow 이벤트에서 e.persisted === true(bfcache 복원) 감지
-    * 감지 시 window.location.reload()로 강제 새로고침
-    * 강제 새로고침으로 Next.js 라우터를 깨끗하게 재초기화하여 충돌 방지
+  1차 시도 (useEffect 방식 — 실패):
+    - BfcacheGuard.tsx를 'use client' + useEffect로 pageshow 리스너 등록
+    - 문제 1: React cleanup이 bfcache 진입 전 리스너를 제거할 수 있어 불안정
+    - 문제 2: bfcache가 아닌 fresh 앞으로 이동(e.persisted === false)은 감지 불가
+
+  2차 수정 (인라인 스크립트 방식 — 해결):
+    - BfcacheGuard.tsx를 서버 컴포넌트 + <script dangerouslySetInnerHTML>로 교체
+    - HTML 파싱 시점에 즉시 실행 → React 초기화 이전, React lifecycle 무관
+    - 두 케이스 모두 처리:
+        (1) bfcache 복원: pageshow 이벤트 e.persisted === true → reload()
+        (2) fresh 앞으로 이동: performance.getEntriesByType('navigation')[0]
+            .type === 'back_forward' → reload()
+    - reload() 후 navigation.type이 'reload'로 바뀌어 무한 루프 없음
   - layout.tsx에 <BfcacheGuard /> 전역 마운트 (모든 페이지에 자동 적용)
 
 수정 파일: components/BfcacheGuard.tsx(신규), app/layout.tsx
