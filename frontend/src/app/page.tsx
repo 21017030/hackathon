@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, ChevronRight, X, FileText, LogOut } from 'lucide-react';
+import { Upload, ChevronRight, X, FileText, LogOut, LogIn } from 'lucide-react';
 
 import Sidebar from '@/components/Sidebar';
 import ExplorerView from '@/components/ExplorerView';
@@ -26,6 +26,7 @@ export default function App() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadInitialCategoryId, setUploadInitialCategoryId] = useState<number | null>(null);
   const [uploadShowFolderSelect, setUploadShowFolderSelect] = useState(true);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   // 문서 탭
   const [tabs, setTabs] = useState<OpenTab[]>([]);
@@ -35,9 +36,10 @@ export default function App() {
   const { categories, documents, sessions, setSessions, refresh } = useAppData(userId);
   const { messages, currentSessionId, setCurrentSessionId, sendMessage, isAsking, loadMessages } = useChat();
 
-  if (!user) {
-    return <AuthScreen onSuccess={saveUser} />;
-  }
+  const requireAuth = (action: () => void) => {
+    if (!user) { setLoginModalOpen(true); return; }
+    action();
+  };
 
   // ── 문서 탭 관리 ──────────────────────────────────────────
   const openDocumentTab = async (documentId: number, filename: string) => {
@@ -97,9 +99,11 @@ export default function App() {
 
   // ── 업로드 ────────────────────────────────────────────────
   const openUploadModal = (categoryId: number | null, showFolderSelect = true) => {
-    setUploadInitialCategoryId(categoryId);
-    setUploadShowFolderSelect(showFolderSelect);
-    setUploadModalOpen(true);
+    requireAuth(() => {
+      setUploadInitialCategoryId(categoryId);
+      setUploadShowFolderSelect(showFolderSelect);
+      setUploadModalOpen(true);
+    });
   };
 
   const pollDocumentStatus = (documentId: number): Promise<void> =>
@@ -134,13 +138,15 @@ export default function App() {
   };
 
   // ── 폴더 / 문서 ──────────────────────────────────────────
-  const handleCreateFolder = async (name: string) => {
-    try {
-      await createCategory(userId, name);
-      refresh();
-    } catch {
-      alert('폴더 생성에 실패했습니다.');
-    }
+  const handleCreateFolder = (name: string) => {
+    requireAuth(async () => {
+      try {
+        await createCategory(userId, name);
+        refresh();
+      } catch {
+        alert('폴더 생성에 실패했습니다.');
+      }
+    });
   };
 
   const handleDeleteDocument = async (id: number) => {
@@ -178,14 +184,16 @@ export default function App() {
     loadMessages(id);
   };
 
-  const handleNewSession = async (title: string) => {
-    try {
-      const session = await createSession(userId, title);
-      setSessions(prev => [session, ...prev]);
-      handleSessionClick(session.id);
-    } catch {
-      alert('대화방 생성에 실패했습니다.');
-    }
+  const handleNewSession = (title: string) => {
+    requireAuth(async () => {
+      try {
+        const session = await createSession(userId, title);
+        setSessions(prev => [session, ...prev]);
+        handleSessionClick(session.id);
+      } catch {
+        alert('대화방 생성에 실패했습니다.');
+      }
+    });
   };
 
   const handleSessionDelete = async (id: number) => {
@@ -202,10 +210,12 @@ export default function App() {
   };
 
   const handleSend = (content: string) => {
-    const docIds = selectedCategoryId
-      ? documents.filter(d => d.category_id === selectedCategoryId).map(d => d.id)
-      : undefined;
-    sendMessage(content, docIds);
+    requireAuth(() => {
+      const docIds = selectedCategoryId
+        ? documents.filter(d => d.category_id === selectedCategoryId).map(d => d.id)
+        : undefined;
+      sendMessage(content, docIds);
+    });
   };
 
   const handleHomeClick = () => {
@@ -228,8 +238,8 @@ export default function App() {
     <div className="flex h-screen bg-[#F8F9FB] text-gray-800 font-sans">
       <Sidebar
         userId={userId}
-        userName={user.name}
-        userStudentId={user.student_id}
+        userName={user?.name ?? ''}
+        userStudentId={user?.student_id ?? ''}
         sessions={sessions}
         categories={categories}
         currentSessionId={currentSessionId}
@@ -253,20 +263,40 @@ export default function App() {
             <span className="font-bold text-gray-700 max-w-xs truncate">{breadcrumb}</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-500">{user.name}</span>
-            <button
-              onClick={() => openUploadModal(selectedCategoryId)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all shadow-sm"
-            >
-              <Upload size={16} /> 자료 업로드
-            </button>
-            <button
-              onClick={logout}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              title="로그아웃"
-            >
-              <LogOut size={18} />
-            </button>
+            {user ? (
+              <>
+                <span className="text-sm text-gray-500">{user.name}</span>
+                <button
+                  onClick={() => openUploadModal(selectedCategoryId)}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all shadow-sm"
+                >
+                  <Upload size={16} /> 자료 업로드
+                </button>
+                <button
+                  onClick={logout}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="로그아웃"
+                >
+                  <LogOut size={18} />
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="text-sm text-gray-400">로그인 하세요</span>
+                <button
+                  onClick={() => openUploadModal(selectedCategoryId)}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all shadow-sm"
+                >
+                  <Upload size={16} /> 자료 업로드
+                </button>
+                <button
+                  onClick={() => setLoginModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 border border-indigo-600 text-indigo-600 rounded-lg text-sm font-bold hover:bg-indigo-50 transition-all"
+                >
+                  <LogIn size={16} /> 로그인
+                </button>
+              </>
+            )}
           </div>
         </header>
 
@@ -347,6 +377,13 @@ export default function App() {
           uploadStatus={uploadStatus}
           onUpload={handleUpload}
           onClose={() => setUploadModalOpen(false)}
+        />
+      )}
+
+      {loginModalOpen && (
+        <AuthScreen
+          onSuccess={u => { saveUser(u); setLoginModalOpen(false); }}
+          onClose={() => setLoginModalOpen(false)}
         />
       )}
     </div>
