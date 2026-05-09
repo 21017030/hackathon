@@ -29,7 +29,9 @@ backend/
 │   ├── services/                  # 실제 비즈니스 로직 (DB 조작, 외부 API 호출)
 │   │   ├── auth.py                # 비밀번호 해싱, 회원가입/로그인/수정 처리
 │   │   ├── category.py            # 카테고리 CRUD 처리
-│   │   ├── document.py            # 파일 검증, 스토리지 업로드, RAG 파이프라인
+│   │   ├── document_storage.py    # 파일 검증, 스토리지 업로드/조회/삭제
+│   │   ├── document_rag.py        # PDF 추출, 청킹, 임베딩, 벡터 저장 파이프라인
+│   │   ├── document.py            # 하위 호환 re-export 레이어 (위 두 파일을 재노출)
 │   │   └── chat.py                # 벡터 검색, Gemini 프롬프트 조합 및 응답 생성
 │   │
 │   └── api/routes/                # HTTP 엔드포인트 정의 (얇은 라우터 레이어)
@@ -132,47 +134,59 @@ backend/
   - get_categories(): 특정 user_id의 카테고리를 오래된 순으로 조회.
   - delete_category(): 연결된 문서가 있으면 409 에러 반환 (안전 삭제).
 
-[document.py]
-  Gemini 모델/상수: core/gemini.py에서 import (CHAT_MODEL, EMBEDDING_MODEL 등)
+[document_storage.py]  ← 신규 (document.py에서 분리)
+  스토리지 관련 관심사만 담당. AI/임베딩 코드 없음.
 
-  허용 파일 형식: PDF만 허용 (.pdf)
+  상수:
+    ALLOWED_EXTENSIONS = {".pdf"}
+    CONTENT_TYPES      = {".pdf": "application/pdf"}
+    MAGIC_NUMBERS      = {".pdf": b"%PDF"}
 
-  핵심 함수:
+  함수:
 
-  (1) validate_file(original_name, contents)
-      - 확장자 화이트리스트 검사 (.pdf)
-      - 파일 크기 50MB 초과 검사
-      - 매직 넘버(%PDF) 검사로 확장자 위조 탐지
+  validate_file(original_name, contents)
+    - 확장자 화이트리스트 검사 (.pdf)
+    - 파일 크기 50MB 초과 검사
+    - 매직 넘버(%PDF) 검사로 확장자 위조 탐지
 
-  (2) _extract_pdf_gemini(file_bytes, filename)
-      - Gemini Files API로 PDF를 업로드해 멀티모달 텍스트 추출
-      - 이미지·표·차트 설명 포함, 각 페이지에 [N페이지] 마커 삽입
-      - 임시 파일 생성 → 업로드 → 추출 → 임시 파일·업로드 파일 모두 정리
-      - 실패 시 PyMuPDF(fitz)로 폴백
+  upload_document(original_name, contents, ext, user_id, category_id)
+    - UUID로 랜덤 파일명 생성 후 Supabase Storage 'documents' 버킷에 업로드
+    - documents 테이블에 메타데이터 INSERT (parsing_status = 'PENDING')
+    - 스토리지 업로드 성공 후 DB 실패 시 스토리지 파일도 롤백 삭제
+    - 생성된 document_id 반환
 
-  (3) upload_document(original_name, contents, ext, user_id, category_id)
-      - UUID로 랜덤 파일명 생성 후 Supabase Storage 'documents' 버킷에 업로드
-      - documents 테이블에 메타데이터 INSERT (parsing_status = 'PENDING')
-      - 스토리지 업로드 성공 후 DB 실패 시 스토리지 파일도 롤백 삭제
-      - 생성된 document_id 반환
+  get_documents_by_user(user_id)  : 해당 유저의 모든 문서 조회
+  get_documents_by_category(id)   : 카테고리별 문서 조회
+  get_document_view(document_id)  : signed_url + chunks 전체 content 반환
+  delete_document(document_id)    : chunks → DB 레코드 → 스토리지 순서로 삭제
 
-  (4) process_document_rag(document_id)  ← 백그라운드 비동기 실행
-      RAG 인제스천 파이프라인 전체:
-      Step 1. Supabase Storage에서 파일 바이트 다운로드
-      Step 2. _extract_pdf_gemini()로 멀티모달 텍스트 추출
-              실패 시 PyMuPDF 폴백
-      Step 3. CHUNK_SIZE(1000)자 단위로 텍스트 청킹
-      Step 4. 각 청크를 gemini-embedding-001로 임베딩 벡터 생성
-              task_type="retrieval_document", dimensions=1536
-      Step 5. document_chunks 테이블에 (content, embedding, chunk_index) INSERT
-      Step 6. documents 테이블 parsing_status를 'COMPLETED'로 업데이트
-              (실패 시 'FAILED'로 업데이트)
+[document_rag.py]  ← 신규 (document.py에서 분리)
+  RAG 파이프라인 전담. Gemini API + 임베딩 관련 코드만 담당.
+  Gemini 모델/상수: core/gemini.py에서 import
 
-  추가 함수:
-  - get_documents_by_user(user_id): 해당 유저의 모든 문서 조회
-  - get_documents_by_category(category_id): 카테고리별 문서 조회
-  - get_document_view(document_id): signed_url + chunks 전체 content 반환
-  - delete_document(document_id): chunks → DB 레코드 → 스토리지 순서로 삭제
+  함수:
+
+  _extract_pdf_gemini(file_bytes, filename)  ← 내부 헬퍼
+    - Gemini Files API로 PDF를 업로드해 멀티모달 텍스트 추출
+    - 이미지·표·차트 설명 포함, 각 페이지에 [N페이지] 마커 삽입
+    - 임시 파일 생성 → 업로드 → 추출 → 임시 파일·업로드 파일 모두 정리
+    - 실패 시 PyMuPDF(fitz)로 폴백
+
+  process_document_rag(document_id)  ← 백그라운드 비동기 실행
+    RAG 인제스천 파이프라인 전체:
+    Step 1. Supabase Storage에서 파일 바이트 다운로드
+    Step 2. _extract_pdf_gemini()로 멀티모달 텍스트 추출 (실패 시 PyMuPDF 폴백)
+    Step 3. CHUNK_SIZE(1000)자 단위로 텍스트 청킹
+    Step 4. 각 청크를 gemini-embedding-001로 임베딩 벡터 생성
+            task_type="retrieval_document", dimensions=1536
+    Step 5. document_chunks 테이블에 (content, embedding, chunk_index) INSERT
+    Step 6. documents 테이블 parsing_status를 'COMPLETED'로 업데이트
+            (실패 시 'FAILED'로 업데이트)
+
+[document.py]  ← 하위 호환 re-export 레이어
+  실제 구현은 document_storage.py와 document_rag.py에 있음.
+  이 파일을 import하던 기존 코드가 변경 없이 동작하도록 두 파일을 재노출.
+  ※ 새 코드는 document_storage / document_rag에서 직접 import 권장.
 
 [chat.py]
   Gemini 모델/상수: core/gemini.py에서 import

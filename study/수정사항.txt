@@ -509,3 +509,44 @@
 
 수정 파일: core/gemini.py, services/document.py, services/chat.py,
            constants.ts, app/page.tsx, components/Sidebar.tsx
+
+
+----------------------------------------------------------------
+[수정 24] 기능 분리 리팩토링 - 단일 책임 원칙 적용
+----------------------------------------------------------------
+
+배경:
+  document.py가 스토리지 관심사(업로드·삭제·조회)와 AI 관심사(PDF 추출·임베딩·벡터저장)를
+  한 파일에 혼합하고 있었음.
+  ExplorerView.tsx가 폴더 그리드 UI와 문서 테이블 UI를 모두 포함해 1개 파일이 너무 컸음.
+  mypage, mypage/edit에서 동일한 인증 가드 useEffect 코드가 중복되어 있었음.
+
+수정 내용:
+  백엔드:
+  (1) document.py → document_storage.py + document_rag.py 분리
+    - document_storage.py: 파일 검증(validate_file), 스토리지 업로드/다운로드/삭제
+      (upload_document, get_documents_by_user, get_documents_by_category,
+       get_document_view, delete_document), MAGIC_NUMBERS·CONTENT_TYPES·ALLOWED_EXTENSIONS 상수
+    - document_rag.py: PDF 멀티모달 추출(_extract_pdf_gemini),
+      RAG 파이프라인(process_document_rag) - Gemini Files API + 임베딩 + 벡터저장
+    - document.py: 하위 호환 re-export 레이어만 남김 (기존 import 경로 유지)
+    - routes/documents.py: document_storage와 document_rag에서 직접 import
+
+  프론트엔드:
+  (2) useRequireAuth.ts 훅 신규 추출
+    - mypage/page.tsx, mypage/edit/page.tsx 양쪽에 중복된 인증 가드 useEffect를
+      useRequireAuth() 훅으로 추출하여 공통화
+    - 반환값: User | null (null이면 페이지 렌더링 보류, 로그인 후 폼 초기화)
+    - SSR 안전: useEffect 안에서만 localStorage 접근
+
+  (3) ExplorerView.tsx → FolderGrid.tsx + DocumentTable.tsx 분리
+    - FolderGrid.tsx: 폴더 카드 그리드 + 인라인 폴더 생성 폼 (자체 상태: isCreating, newName)
+    - DocumentTable.tsx: 문서 목록 테이블 + StatusBadge 서브컴포넌트
+    - ExplorerView.tsx: selectedCategoryId로 visibleDocs 필터링 후
+      FolderGrid·DocumentTable에 위임하는 조합 레이어만 유지
+
+수정 파일: services/document_storage.py(신규), services/document_rag.py(신규),
+           services/document.py(re-export로 축소), routes/documents.py,
+           hooks/useRequireAuth.ts(신규), components/FolderGrid.tsx(신규),
+           components/DocumentTable.tsx(신규), components/ExplorerView.tsx(축소),
+           app/mypage/page.tsx, app/mypage/edit/page.tsx
