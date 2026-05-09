@@ -14,6 +14,5 @@ class DocumentResponse(BaseModel):
     user_id: Optional[str]
     category_id: Optional[int]
     original_file_name: str
-    file_path: str
     parsing_status: str
     created_at: datetime
