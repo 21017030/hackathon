@@ -14,6 +14,7 @@ export function useAppData(userId: string) {
   const pendingRefresh = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (!userId) return;
     if (isRefreshing.current) {
       pendingRefresh.current = true;
       return;

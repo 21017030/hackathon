@@ -6,6 +6,6 @@ python-multipart
 jupyter-server-proxy
 pymupdf
 google-genai
-passlib[bcrypt]
+bcrypt
 python-pptx
 python-docx

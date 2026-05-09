@@ -1,12 +1,18 @@
 import logging
+import bcrypt
 from fastapi import HTTPException
-from passlib.context import CryptContext
 
 from app.core.supabase import supabase
 
 logger = logging.getLogger(__name__)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
 def register_user(student_id: str, login_id: str, password: str, name: str) -> dict:
@@ -16,12 +22,11 @@ def register_user(student_id: str, login_id: str, password: str, name: str) -> d
     if supabase.table("users").select("id").eq("student_id", student_id).execute().data:
         raise HTTPException(status_code=409, detail="이미 등록된 학번입니다.")
 
-    hashed = pwd_context.hash(password)
     try:
         res = supabase.table("users").insert({
             "student_id": student_id,
             "login_id": login_id,
-            "password": hashed,
+            "password": _hash(password),
             "name": name,
         }).execute()
         user = res.data[0]
@@ -37,7 +42,7 @@ def login_user(login_id: str, password: str) -> dict:
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
 
     user = res.data[0]
-    if not pwd_context.verify(password, user["password"]):
+    if not _verify(password, user["password"]):
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
 
     return {"id": user["id"], "student_id": user["student_id"], "login_id": user["login_id"], "name": user["name"]}
