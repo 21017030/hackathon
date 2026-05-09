@@ -5,7 +5,7 @@ supabase
 python-multipart
 jupyter-server-proxy
 pymupdf
-google-generativeai
+google-genai
 passlib[bcrypt]
 python-pptx
 python-docx

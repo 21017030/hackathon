@@ -5,7 +5,8 @@ import os
 import io
 import fitz  # PyMuPDF
 from typing import List
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from pptx import Presentation
 from docx import Document as DocxDocument
 
@@ -17,8 +18,7 @@ from app.core.supabase import supabase
 logger = logging.getLogger(__name__)
 
 # Gemini API 설정
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 # 사용할 모델 정의
 CHAT_MODEL = "gemini-2.5-flash-lite"
@@ -152,14 +152,15 @@ async def process_document_rag(document_id: int):
 
         # 5. 임베딩 생성 및 저장
         for i, chunk_content in enumerate(chunks):
-            # Gemini 임베딩 생성 (models/embedding-001 사용)
-            embedding_res = genai.embed_content(
+            embedding_res = client.models.embed_content(
                 model=EMBEDDING_MODEL,
-                content=chunk_content,
-                task_type="retrieval_document",
-                output_dimensionality=EMBEDDING_DIMENSIONS,
+                contents=chunk_content,
+                config=types.EmbedContentConfig(
+                    task_type="retrieval_document",
+                    output_dimensionality=EMBEDDING_DIMENSIONS,
+                ),
             )
-            embedding_vector = embedding_res['embedding']
+            embedding_vector = embedding_res.embeddings[0].values
 
             # document_chunks 테이블에 저장
             supabase.table("document_chunks").insert({

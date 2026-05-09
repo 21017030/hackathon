@@ -1,10 +1,10 @@
 import logging
-import google.generativeai as genai
 from typing import List, Optional
+from google.genai import types
 
 from fastapi import HTTPException
 from app.core.supabase import supabase
-from app.services.document import CHAT_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+from app.services.document import CHAT_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, client
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +38,15 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
 
         # 2. 질문 임베딩 생성
         logger.info(f"Generating embedding for question using {EMBEDDING_MODEL}")
-        embedding_res = genai.embed_content(
+        embedding_res = client.models.embed_content(
             model=EMBEDDING_MODEL,
-            content=content,
-            task_type="retrieval_query",
-            output_dimensionality=EMBEDDING_DIMENSIONS,
+            contents=content,
+            config=types.EmbedContentConfig(
+                task_type="retrieval_query",
+                output_dimensionality=EMBEDDING_DIMENSIONS,
+            ),
         )
-        query_vector = embedding_res['embedding']
+        query_vector = embedding_res.embeddings[0].values
 
         # 3. 관련 텍스트 조각 검색 (Vector Search)
         chunks = await get_relevant_chunks(query_vector, document_ids)
@@ -68,8 +70,6 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
 
         # 5. Gemini 2.0에게 프롬프트 전달
         logger.info(f"Prompting Gemini model: {CHAT_MODEL}")
-        model = genai.GenerativeModel(CHAT_MODEL)
-        
         prompt = f"""
 당신은 대학생의 학습을 돕는 유능한 AI 어시스턴트입니다. 
 제공된 [강의자료 내용]을 바탕으로 사용자의 질문에 답변하세요. 
@@ -86,7 +86,10 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
 답변:
 """
         
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=CHAT_MODEL,
+            contents=prompt,
+        )
         ai_answer = response.text
 
         # 6. AI 답변 저장
