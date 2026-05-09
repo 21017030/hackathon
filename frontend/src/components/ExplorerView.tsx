@@ -217,12 +217,6 @@ export default function ExplorerView({
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={onStartChat}
-                        className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                      >
-                        질문하기
-                      </button>
-                      <button
                         onClick={() => onDeleteDocument(doc.id)}
                         className="p-2 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
                         title="문서 삭제"
