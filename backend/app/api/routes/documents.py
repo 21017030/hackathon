@@ -64,7 +64,7 @@ def view_document(document_id: int):
 @router.get("/{document_id}/chat")
 def get_document_chat(document_id: int):
     res = supabase.table("document_chat_messages") \
-        .select("id, sender_type, content, sources, created_at") \
+        .select("id, sender_type, content, created_at") \
         .eq("document_id", document_id) \
         .order("created_at", desc=False) \
         .execute()

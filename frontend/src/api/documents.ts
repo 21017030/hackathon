@@ -40,7 +40,6 @@ export async function getDocumentChat(documentId: number): Promise<SimpleMessage
   return (res.data as any[]).map(m => ({
     sender: m.sender_type === 'USER' ? 'user' : 'ai',
     content: m.content,
-    sources: m.sources ?? [],
   }));
 }
 
@@ -51,7 +50,7 @@ export async function clearDocumentChat(documentId: number): Promise<void> {
 export async function askAboutDocument(
   documentId: number,
   content: string,
-): Promise<{ answer: string; sources: Source[] }> {
+): Promise<{ answer: string }> {
   const res = await client.post(`/documents/${documentId}/ask`, { content });
-  return { answer: res.data.answer, sources: res.data.sources ?? [] };
+  return { answer: res.data.answer };
 }

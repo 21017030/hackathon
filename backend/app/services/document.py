@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # 사용할 모델 정의
-CHAT_MODEL = "gemini-2.5-flash"
+CHAT_MODEL = "gemini-3.1-flash-lite"
 REWRITE_MODEL = "gemini-3.1-flash-lite"
 EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIMENSIONS = 1536  # pgvector HNSW 인덱스 호환 (최대 2000차원)

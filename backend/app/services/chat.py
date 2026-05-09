@@ -232,23 +232,17 @@ async def ask_about_document(document_id: int, content: str) -> dict:
     )
     query_vector = embedding_res.embeddings[0].values
 
-    chunks = await get_relevant_chunks_with_sources(query_vector, [document_id])
+    chunks = await get_relevant_chunks(query_vector, [document_id])
     context = _build_context(chunks)
-    sources = _extract_sources(chunks)
 
     history_str = "\n".join([
         f"{'사용자' if m['sender_type'] == 'USER' else 'AI'}: {m['content'][:300]}"
         for m in history
     ])
 
-    filenames = "|".join(s['filename'] for s in sources)
     prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
 아래 [문서 내용]을 바탕으로 질문에 간결하게 답변하세요.
 자료에 없는 내용은 솔직하게 모른다고 말하세요.
-
-답변 맨 끝에 실제로 참고한 파일명만 아래 형식으로 추가하세요 (참고하지 않은 파일은 제외):
-[참고자료: 파일명1|파일명2]
-가능한 파일명: {filenames}
 
 [문서 내용]
 {context}
@@ -261,17 +255,16 @@ async def ask_about_document(document_id: int, content: str) -> dict:
 답변:"""
 
     response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
-    answer, sources = _filter_used_sources(response.text, sources)
+    answer = response.text or ""
 
     # 4. AI 답변 저장
     supabase.table("document_chat_messages").insert({
         "document_id": document_id,
         "sender_type": "AI",
         "content": answer,
-        "sources": sources,
     }).execute()
 
-    return {"answer": answer, "sources": sources}
+    return {"answer": answer, "sources": []}
 
 
 def delete_session(session_id: int) -> None:
