@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { checkLoginId, updateUser } from '@/api/auth';
 import type { User } from '@/types';
@@ -9,6 +10,7 @@ const NAME_REGEX = /^[가-힣a-zA-Z\s]+$/;
 const STORAGE_KEY = 'vibe_user';
 
 export default function EditProfilePage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [form, setForm] = useState({ studentId: '', loginId: '', name: '' });
   const [original, setOriginal] = useState({ studentId: '', loginId: '', name: '' });
@@ -20,14 +22,14 @@ export default function EditProfilePage() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { window.location.href = '/'; return; }
+      if (!raw) { router.push('/'); return; }
       const u = JSON.parse(raw) as User;
       setUser(u);
       const init = { studentId: u.student_id, loginId: u.login_id, name: u.name };
       setForm(init);
       setOriginal(init);
     } catch {
-      window.location.href = '/';
+      router.push('/');
     }
   }, []);
 
@@ -89,7 +91,7 @@ export default function EditProfilePage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasChanged()) {
-      window.location.href = '/mypage';
+      router.push('/mypage');
       return;
     }
     if (!validate()) return;
@@ -104,7 +106,7 @@ export default function EditProfilePage() {
     try {
       const updated = await updateUser(user.id, payload);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      window.location.href = '/mypage';
+      router.push('/mypage');
     } catch (err: any) {
       const detail = err?.response?.data?.detail ?? '';
       if (detail.includes('학번')) setErrors(e => ({ ...e, studentId: '이미 등록된 학번입니다.' }));
@@ -122,7 +124,7 @@ export default function EditProfilePage() {
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
         <div className="flex items-center gap-3 mb-6">
           <button
-            onClick={() => { window.location.href = '/mypage'; }}
+            onClick={() => { router.push('/mypage'); }}
             className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
           >
             <ArrowLeft size={18} />
@@ -184,7 +186,7 @@ export default function EditProfilePage() {
           <div className="flex gap-3 mt-1">
             <button
               type="button"
-              onClick={() => { window.location.href = '/mypage'; }}
+              onClick={() => { router.push('/mypage'); }}
               className="flex-1 border border-gray-300 text-gray-600 rounded-lg py-2.5 text-sm font-semibold hover:bg-gray-50 transition-colors"
             >
               취소

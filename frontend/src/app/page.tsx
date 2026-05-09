@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Upload, ChevronRight, X, FileText, LogOut, LogIn, User as UserIcon } from 'lucide-react';
 
 import Sidebar from '@/components/Sidebar';
@@ -18,6 +19,7 @@ import { createSession, deleteSession } from '@/api/chat';
 import type { ViewMode, OpenTab } from '@/types';
 
 export default function App() {
+  const router = useRouter();
   const { user, saveUser, logout } = useAuth();
 
   const [viewMode, setViewMode] = useState<ViewMode>('explorer');
@@ -272,7 +274,7 @@ export default function App() {
                   <Upload size={16} /> 자료 업로드
                 </button>
                 <button
-                  onClick={() => window.location.href = '/mypage'}
+                  onClick={() => router.push('/mypage')}
                   className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-indigo-600 text-sm font-semibold transition-colors"
                   title="마이페이지"
                 >
@@ -302,7 +304,7 @@ export default function App() {
                   <LogIn size={16} /> 로그인
                 </button>
                 <button
-                  onClick={() => window.location.href = '/register'}
+                  onClick={() => router.push('/register')}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-200 transition-all"
                 >
                   회원가입

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { updateUser } from '@/api/auth';
 import type { User } from '@/types';
@@ -8,6 +9,7 @@ import type { User } from '@/types';
 const STORAGE_KEY = 'vibe_user';
 
 export default function MyPage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [pwForm, setPwForm] = useState({ password: '', passwordConfirm: '', error: '', success: false });
   const [pwSaving, setPwSaving] = useState(false);
@@ -15,10 +17,10 @@ export default function MyPage() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { window.location.href = '/'; return; }
+      if (!raw) { router.push('/'); return; }
       setUser(JSON.parse(raw) as User);
     } catch {
-      window.location.href = '/';
+      router.push('/');
     }
   }, []);
 
@@ -59,7 +61,7 @@ export default function MyPage() {
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
         <div className="flex items-center gap-3 mb-6">
           <button
-            onClick={() => { window.location.href = '/'; }}
+            onClick={() => router.push('/')}
             className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
           >
             <ArrowLeft size={18} />
@@ -85,7 +87,7 @@ export default function MyPage() {
 
         {/* 사용자 정보 수정 버튼 */}
         <button
-          onClick={() => { window.location.href = '/mypage/edit'; }}
+          onClick={() => router.push('/mypage/edit')}
           className="w-full flex items-center justify-between px-4 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors mb-6"
         >
           <span>사용자 정보 수정</span>
