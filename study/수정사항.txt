@@ -265,3 +265,247 @@
     (documents + categories 테이블 조인하여 출처 메타데이터 보강)
 
 수정 파일: services/chat.py
+
+
+----------------------------------------------------------------
+[수정 15] 로그인/회원가입/마이페이지 기능 전체 구현
+----------------------------------------------------------------
+
+배경:
+  student_id를 식별자로 하드코딩해 쓰던 방식에서 벗어나
+  로그인/회원가입/프로필 수정 기능을 추가.
+
+수정 내용:
+  DB 마이그레이션:
+  - users 테이블 신설: id(UUID PK, gen_random_uuid()), student_id(UNIQUE),
+    login_id(UNIQUE), password(bcrypt), name
+  - 기존 categories, documents, chat_sessions 테이블:
+    student_id FK → user_id(UUID) FK로 교체
+  - UUID 마이그레이션: 기존 데이터는 student_id 매칭으로 user_id 컬럼 채움
+
+  백엔드:
+  - services/auth.py: register_user, login_user, check_login_id_available,
+    update_user (bcrypt 직접 사용, passlib 제거)
+  - models/auth.py: RegisterRequest, LoginRequest, UpdateUserRequest,
+    UserResponse(id 포함) 추가
+  - routes/auth.py:
+    POST /auth/register, POST /auth/login
+    GET  /auth/check-login-id?login_id=xxx → {"available": bool}
+    PUT  /auth/users/{user_id}
+
+  프론트엔드:
+  - api/auth.ts: login, register, checkLoginId, updateUser 함수 추가
+  - hooks/useAuth.ts: localStorage 기반 User 상태 관리
+    (SSR 하이드레이션 문제 방지: useEffect 안에서만 localStorage 접근)
+  - components/AuthScreen.tsx: 로그인 전용 모달 (회원가입은 /register 링크)
+  - app/register/page.tsx: 회원가입 페이지 신규 생성
+    (아이디 중복확인, 비밀번호 6자 이상, 이름 특수문자 불가, 학번 중복은 서버 처리)
+  - app/mypage/page.tsx: 마이페이지 (정보 열람 + 비밀번호 변경)
+  - app/mypage/edit/page.tsx: 정보 수정 페이지
+    (아이디/이름/학번 수정, 변경된 필드만 API 전송)
+  - page.tsx: requireAuth 패턴 도입
+    (업로드·폴더생성·채팅 시도 시 로그인 모달 표시)
+    헤더: 로그인 시 유저이름+마이페이지+로그아웃, 미로그인 시 로그인+회원가입
+
+수정 파일: 백엔드 services/auth.py, models/auth.py, routes/auth.py,
+           프론트 api/auth.ts, hooks/useAuth.ts, components/AuthScreen.tsx,
+           app/register/page.tsx, app/mypage/page.tsx, app/mypage/edit/page.tsx,
+           app/page.tsx, hooks/useAppData.ts
+
+
+----------------------------------------------------------------
+[수정 16] bcrypt + passlib 5.0 호환 문제
+----------------------------------------------------------------
+
+문제:
+  uvicorn 실행 후 로그인/회원가입 API 호출 시
+  "AttributeError: module 'bcrypt' has no attribute '__about__'" 발생.
+
+원인:
+  passlib이 bcrypt의 버전 정보를 bcrypt.__about__.__version__으로 읽는데
+  bcrypt 5.0에서 __about__ 모듈이 제거됨.
+
+수정 내용:
+  - requirements.txt에서 passlib 제거
+  - services/auth.py: passlib 완전 제거 후 bcrypt 직접 사용
+    _hash(pw)   → bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+    _verify(pw) → bcrypt.checkpw(pw.encode(), hashed.encode())
+
+수정 파일: requirements.txt, services/auth.py
+
+
+----------------------------------------------------------------
+[수정 17] RAG 사용자 간 데이터 유출 버그
+----------------------------------------------------------------
+
+문제:
+  A 유저가 대화 시 B 유저가 업로드한 문서의 내용이 답변에 포함됨.
+
+원인 1 (document_ids 전달 없을 때 전체 문서 검색):
+  ask_question()에서 document_ids가 None이면 전체 문서를 검색하는 로직이 있었음.
+  프론트에서 카테고리 필터 없이 보낼 때 document_ids=None이 전달되어
+  타인 문서까지 검색 대상이 됨.
+
+수정 1:
+  - document_ids가 None이면 세션의 user_id를 조회해 해당 유저의 문서 ID만 추출.
+  - if not document_ids: (None과 [] 모두 처리) →
+    if document_ids is None: (명시적으로 None만 처리)
+
+원인 2 (출처 폴백):
+  AI 답변에 [참고자료:] 마커가 없으면 _filter_used_sources()가
+  검색된 청크 전체를 sources로 반환했음.
+
+수정 2:
+  - 마커 없으면 (ai_answer, []) 반환 (빈 sources)
+
+수정 파일: services/chat.py
+
+
+----------------------------------------------------------------
+[수정 18] 회원가입 중복확인 빨간 메시지가 안 사라지는 문제
+----------------------------------------------------------------
+
+문제:
+  아이디 중복확인 미완료 에러 메시지(빨간색)가 표시된 상태에서
+  중복확인을 완료해도 빨간 메시지가 사라지지 않고 초록 메시지와 함께 표시됨.
+
+원인:
+  에러 메시지 표시 조건이 loginIdStatus !== 'taken' 이어서
+  'available' 상태에서도 errors.loginId가 있으면 표시됨.
+
+수정 내용:
+  - 에러 메시지 표시 조건: loginIdStatus === 'idle' 일 때만 표시
+  - 중복확인 성공 시 errors.loginId 초기화 추가
+
+수정 파일: app/register/page.tsx, app/mypage/edit/page.tsx
+
+
+----------------------------------------------------------------
+[수정 19] 브라우저 뒤로/앞으로 버튼 사용 시 화면 동결 문제
+----------------------------------------------------------------
+
+문제:
+  마이페이지, 회원가입 등 페이지 이동 후 브라우저의 뒤로/앞으로 버튼을 누르면
+  화면이 완전히 굳어 아무것도 동작하지 않음.
+  콘솔 에러: "Internal Next.js error: Router action dispatched before initialization"
+
+원인:
+  window.location.href = '/path' 방식으로 페이지를 이동하면
+  Next.js 라우터의 히스토리 스택을 우회하게 됨.
+  이후 브라우저 뒤로/앞으로 버튼을 누르면 라우터가 초기화되기 전에
+  히스토리 이벤트가 발생해 충돌.
+
+수정 내용:
+  - 모든 페이지 이동을 window.location.href → useRouter().push()로 교체
+  - 대상 파일: page.tsx, mypage/page.tsx, mypage/edit/page.tsx
+    (register/page.tsx는 이미 router.push 사용 중이어서 해당 없음)
+  - 로그아웃의 window.location.reload()는 현재 페이지 재로드이므로 유지
+
+수정 파일: app/page.tsx, app/mypage/page.tsx, app/mypage/edit/page.tsx
+
+
+----------------------------------------------------------------
+[수정 20] UI 개선 - 사이드바 로그인 표시 + 필드 순서 변경
+----------------------------------------------------------------
+
+수정 내용:
+  (1) 사이드바 하단 프로필 영역:
+    - 미로그인 시 "로그인 하세요" 텍스트 표시
+    - 로그인 시 기존대로 이름 + 학번 표시
+
+  (2) 회원가입 페이지 필드 순서 변경:
+    기존: 아이디 → 비밀번호 → 비밀번호 확인 → 학번 → 이름
+    변경: 아이디 → 비밀번호 → 비밀번호 확인 → 이름 → 학번
+
+  (3) 정보 수정 페이지 필드 순서 변경:
+    기존: 아이디 → 이름 → 학번 (이미 이름이 위였으나 수정 중 삭제됐다가 복구)
+    변경: 아이디 → 이름 → 학번
+
+수정 파일: components/Sidebar.tsx, app/register/page.tsx,
+           app/mypage/edit/page.tsx
+
+
+----------------------------------------------------------------
+[수정 21] 리팩토링 - 버그/안정성 (High)
+----------------------------------------------------------------
+
+수정 내용:
+  백엔드:
+  (1) ask_question() 분리 및 에러 처리 수정
+    - 156줄 함수를 5개 보조 함수로 분리:
+      _load_history, _save_message, _resolve_document_ids,
+      _generate_embedding, _build_prompt
+    - 기존: 내부 Exception이 raw Exception으로 올라가 FastAPI가 500으로만 처리
+    - 수정: HTTPException이 아닌 예외는 HTTPException(500)으로 명시적 변환
+      (except HTTPException: raise / except Exception: raise HTTPException(500))
+
+  (2) _resolve_document_ids() 신규
+    - 기존: session_res.data[0]["user_id"] → 세션이 없으면 KeyError 발생
+    - 수정: 세션 없으면 HTTPException(404) 발생
+
+  (3) ask_about_document() 에러 처리 추가
+    - 기존: try/except 전혀 없어 Supabase/Gemini 실패 시 raw 500
+    - 수정: HTTPException 래핑 추가
+
+  프론트엔드:
+  (4) useDocumentTabs 훅 분리
+    - page.tsx에 인라인으로 있던 탭 관련 로직(60줄)을 훅으로 분리
+    - page.tsx 크기: 384줄 → 260줄
+
+수정 파일: services/chat.py, hooks/useDocumentTabs.ts, app/page.tsx
+
+
+----------------------------------------------------------------
+[수정 22] 리팩토링 - 코드 품질 (Medium)
+----------------------------------------------------------------
+
+수정 내용:
+  백엔드:
+  (1) core/gemini.py 신규 생성
+    - Gemini 클라이언트 + 모델 상수(CHAT_MODEL, REWRITE_MODEL 등)가
+      document.py에 정의되어 chat.py가 cross-import하던 구조 해소
+    - document.py, chat.py 모두 core/gemini.py에서 import
+
+  (2) routes/auth.py 키워드 인수 수정
+    - update_user(user_id, student_id, login_id, name, password)를
+      위치 인수로 호출하던 것을 키워드 인수로 변경 (인수 순서 변경 시 버그 방지)
+
+  프론트엔드:
+  (3) constants.ts 신규 생성
+    - STORAGE_KEY('vibe_user')가 4개 파일에 하드코딩 → 단일 출처로 통합
+    - NAME_REGEX도 동일하게 통합
+
+  (4) utils/apiError.ts 신규 생성
+    - catch (err: any)로 err?.response?.data?.detail을 접근하던 패턴을
+      getApiErrorDetail(err: unknown): string 함수로 타입 안전하게 교체
+
+  (5) useChat.ts 세션 전환 시 메시지 초기화
+    - 세션 클릭 시 이전 세션 메시지가 잠깐 보이는 문제 수정
+    - loadMessages() 시작 시 setMessages([]) 추가
+
+수정 파일: core/gemini.py(신규), routes/auth.py, constants.ts(신규),
+           utils/apiError.ts(신규), hooks/useChat.ts,
+           app/register/page.tsx, app/mypage/edit/page.tsx, hooks/useAuth.ts
+
+
+----------------------------------------------------------------
+[수정 23] 리팩토링 - 코드 정리 (Low)
+----------------------------------------------------------------
+
+수정 내용:
+  백엔드:
+  (1) core/gemini.py에 파라미터 상수 추가
+    - CHUNK_SIZE(1000), RAG_CHUNK_LIMIT(6),
+      HISTORY_LIMIT(6), REWRITE_HISTORY_WINDOW(4)
+  (2) document.py, chat.py의 하드코딩된 숫자를 상수로 교체
+
+  프론트엔드:
+  (3) constants.ts에 폴링 상수 추가
+    - POLL_INTERVAL_MS(2000), POLL_MAX_WAIT_MS(3*60*1000)
+  (4) page.tsx의 폴링 하드코딩 숫자를 상수로 교체
+  (5) Sidebar.tsx: 미사용 userId prop 제거
+    - 기존: Props에 userId가 있었지만 컴포넌트 내부에서 전혀 사용하지 않음
+    - 수정: Props와 page.tsx 전달부에서 모두 제거
+
+수정 파일: core/gemini.py, services/document.py, services/chat.py,
+           constants.ts, app/page.tsx, components/Sidebar.tsx

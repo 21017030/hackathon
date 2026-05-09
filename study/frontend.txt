@@ -13,22 +13,37 @@ frontend/src/
 │   ├── layout.tsx                 # 전체 페이지 공통 레이아웃 (폰트, KaTeX CSS)
 │   ├── page.tsx                   # 루트 페이지 - 컴포넌트 조립 전용
 │   ├── globals.css                # Tailwind 임포트 + typography 플러그인
-│   └── favicon.ico
+│   ├── favicon.ico
+│   ├── register/
+│   │   └── page.tsx               # 회원가입 페이지 (/register)
+│   └── mypage/
+│       ├── page.tsx               # 마이페이지 (/mypage) - 정보 열람 + 비밀번호 변경
+│       └── edit/
+│           └── page.tsx           # 정보 수정 페이지 (/mypage/edit)
+│
+├── constants.ts                   # 앱 전체 공통 상수 (STORAGE_KEY, NAME_REGEX 등)
 │
 ├── types/
 │   └── index.ts                   # 앱 전체에서 쓰는 TypeScript 타입 정의
 │
 ├── api/                           # 백엔드 HTTP 호출 전담 레이어
 │   ├── client.ts                  # axios 인스턴스 (baseURL 중앙 관리)
+│   ├── auth.ts                    # 인증 관련 API 함수 (login, register, update)
 │   ├── categories.ts              # 카테고리 관련 API 함수
 │   ├── documents.ts               # 문서 관련 API 함수
 │   └── chat.ts                    # 채팅 관련 API 함수
 │
 ├── hooks/                         # 상태 관리 + 사이드이펙트 전담 커스텀 훅
+│   ├── useAuth.ts                 # localStorage 기반 로그인 상태 관리
 │   ├── useAppData.ts              # 카테고리·문서·세션 데이터 페칭 + 스마트 폴링
-│   └── useChat.ts                 # 세션 채팅 메시지 상태 + 질문 전송 로직
+│   ├── useChat.ts                 # 세션 채팅 메시지 상태 + 질문 전송 로직
+│   └── useDocumentTabs.ts         # 문서 탭 상태 관리 (열기/닫기/질문/초기화)
+│
+├── utils/
+│   └── apiError.ts                # API 에러 응답에서 detail 추출 (타입 안전)
 │
 └── components/                    # UI 컴포넌트
+    ├── AuthScreen.tsx             # 로그인 모달 (로그인 폼 + 회원가입 링크)
     ├── Sidebar.tsx                # 좌측 사이드바
     ├── ExplorerView.tsx           # 문서 탐색기 뷰
     ├── ChatView.tsx               # 세션 채팅 뷰
@@ -37,9 +52,24 @@ frontend/src/
 
 
 ----------------------------------------------------------------
-2. types/index.ts - 공통 타입 정의
+2. constants.ts - 공통 상수
 ----------------------------------------------------------------
 
+  STORAGE_KEY      = 'vibe_user'              (localStorage 키)
+  NAME_REGEX       = /^[가-힣a-zA-Z\s]+$/    (이름 유효성 검사)
+  POLL_INTERVAL_MS = 2000                     (업로드 폴링 간격)
+  POLL_MAX_WAIT_MS = 3 * 60 * 1000           (업로드 폴링 최대 대기)
+
+  ※ 이전에 각 파일에 하드코딩되어 있던 값들을 이곳에서 관리.
+    수정 시 이 파일만 변경하면 됨.
+
+
+----------------------------------------------------------------
+3. types/index.ts - 공통 타입 정의
+----------------------------------------------------------------
+
+  User         : { id, student_id, login_id, name }
+                 id는 UUID 문자열. localStorage에 JSON으로 저장됨.
   Category     : { id, name }
   Document     : { id, original_file_name, parsing_status, category_id, created_at }
                  parsing_status: 'PENDING' | 'COMPLETED' | 'FAILED'
@@ -57,253 +87,296 @@ frontend/src/
 
 
 ----------------------------------------------------------------
-3. api/ - HTTP 요청 레이어
+4. api/ - HTTP 요청 레이어
 ----------------------------------------------------------------
 
 [client.ts]
   - axios.create()로 baseURL='http://localhost:8000' 인스턴스를 1개 생성.
   - 모든 API 함수는 이 인스턴스를 import해서 사용한다.
 
+[auth.ts]  ← 신규
+  - login(loginId, password)          : POST /auth/login → User
+  - register(studentId, loginId, password, name) : POST /auth/register → User
+  - checkLoginId(loginId)             : GET /auth/check-login-id → boolean
+                                        (true = 사용 가능)
+  - updateUser(userId, data)          : PUT /auth/users/{userId} → User
+                                        data: { student_id?, login_id?, name?, password? }
+
 [categories.ts]
-  - getCategories(studentId)       : GET /categories/{studentId}
-  - createCategory(studentId, name): POST /categories
-  - deleteCategory(categoryId)     : DELETE /categories/{categoryId}
+  - getCategories(userId)       : GET /categories/{userId}
+  - createCategory(userId, name): POST /categories
+  - deleteCategory(categoryId)  : DELETE /categories/{categoryId}
 
 [documents.ts]
-  - getDocuments(studentId)        : GET /documents/student/{studentId}
-  - uploadDocument(file, studentId, categoryId) : POST /documents/upload
-  - deleteDocument(documentId)     : DELETE /documents/{documentId}
-  - getDocumentView(documentId)    : GET /documents/{documentId}/view
-  - getDocumentChat(documentId)    : GET /documents/{documentId}/chat
-                                     반환 시 sender_type → sender 매핑 처리
-  - clearDocumentChat(documentId)  : DELETE /documents/{documentId}/chat
+  - getDocuments(userId)        : GET /documents/user/{userId}
+  - uploadDocument(file, userId, categoryId) : POST /documents/upload
+  - deleteDocument(documentId)  : DELETE /documents/{documentId}
+  - getDocumentView(documentId) : GET /documents/{documentId}/view
+  - getDocumentChat(documentId) : GET /documents/{documentId}/chat
+                                   반환 시 sender_type → sender 매핑 처리
+  - clearDocumentChat(documentId)      : DELETE /documents/{documentId}/chat
   - askAboutDocument(documentId, content) : POST /documents/{documentId}/ask
-                                     history를 프론트에서 넘기지 않음 (백엔드가 DB에서 로드)
 
 [chat.ts]
-  - getSessions(studentId)         : GET /chat/sessions/{studentId}
-  - createSession(studentId, title): POST /chat/session
-  - getMessages(sessionId)         : GET /chat/messages/{sessionId}
+  - getSessions(userId)          : GET /chat/sessions/{userId}
+  - createSession(userId, title) : POST /chat/session
+  - getMessages(sessionId)       : GET /chat/messages/{sessionId}
   - askQuestion(sessionId, content, documentIds) : POST /chat/ask
-                                     응답: { ...message, sources: [...] } 병합
-  - deleteSession(sessionId)       : DELETE /chat/sessions/{sessionId}
+                                   응답: { ...message, sources: [...] } 병합
+  - deleteSession(sessionId)     : DELETE /chat/sessions/{sessionId}
 
 
 ----------------------------------------------------------------
-4. hooks/ - 상태 관리 커스텀 훅
+5. hooks/ - 상태 관리 커스텀 훅
 ----------------------------------------------------------------
+
+[useAuth.ts]  ← 신규
+  역할: localStorage 기반 로그인 상태를 관리한다.
+        SSR 하이드레이션 문제 방지를 위해 useEffect 안에서만 localStorage 접근.
+
+  반환값:
+    user    : User | null  (null = 미로그인)
+    saveUser(u): localStorage에 저장 + state 업데이트
+    logout(): localStorage 삭제 + state 초기화
+
+  ※ STORAGE_KEY는 constants.ts에서 import.
+  ※ JWT 없이 User 객체 전체를 JSON으로 localStorage에 저장하는 방식.
 
 [useAppData.ts]
   역할: 카테고리, 문서, 채팅 세션 목록을 서버에서 가져와 상태로 관리.
+  ※ userId가 빈 문자열이면 fetch 자체를 하지 않음 (미로그인 보호).
 
   반환값:
-    categories  : Category[]
-    documents   : Document[]
-    sessions    : ChatSession[]
-    setSessions : 외부에서 세션 목록을 직접 수정할 때 사용
-    refresh     : 데이터 전체를 수동으로 다시 불러오는 함수
+    categories, documents, sessions, setSessions, refresh
 
   동작 방식:
     - 마운트 시 categories, documents, sessions를 Promise.allSettled로 병렬 호출.
-      ※ Promise.all 대신 allSettled 사용 → 하나 실패해도 나머지는 정상 반영
-    - 동시 refresh 호출 방지: isRefreshing ref로 중복 실행 차단,
-      pendingRefresh ref로 대기 후 완료 시 재실행
-    - PENDING 상태인 문서가 있을 때만 5초마다 자동 폴링 실행.
-    - PENDING 문서가 없으면 폴링 타이머 정리(clearInterval)
+    - 동시 refresh 호출 방지: isRefreshing ref + pendingRefresh ref
+    - PENDING 문서가 있을 때만 5초마다 자동 폴링.
 
 [useChat.ts]
   역할: 세션 채팅 메시지 상태와 질문 전송 로직 관리.
 
   반환값:
-    messages             : Message[]
-    currentSessionId     : number | null
-    setCurrentSessionId  : 세션 전환 시 사용
-    sendMessage(content, documentIds) : 질문 전송 함수
-    isAsking             : AI 응답 대기 중 여부
-    loadMessages(sessionId) : 특정 세션의 메시지를 서버에서 불러오는 함수
+    messages, currentSessionId, setCurrentSessionId,
+    sendMessage(content, documentIds), isAsking, loadMessages(sessionId)
 
-  sendMessage 동작:
-    1. 사용자 메시지를 낙관적 업데이트로 UI에 즉시 표시
-    2. POST /chat/ask 호출 (백엔드 RAG 파이프라인)
-    3. AI 응답(sources 포함)을 메시지 목록에 추가
+  동작:
+    - loadMessages(): 세션 전환 시 메시지를 즉시 [] 초기화 후 서버에서 로드
+      (이전 세션 메시지가 잠깐 보이는 문제 방지)
+    - sendMessage(): 낙관적 업데이트(USER 메시지 즉시 표시) → POST /chat/ask
+      → AI 응답(sources 포함) 추가
+
+[useDocumentTabs.ts]  ← 신규
+  역할: 문서 탭 관련 상태와 로직을 page.tsx에서 분리.
+
+  반환값:
+    tabs, activeTabId, activeTab, setActiveTabId,
+    openTab(documentId, filename),
+    closeTab(documentId),
+    clearTab(documentId),
+    askInTab(documentId, content)
+
+  동작:
+    - openTab(): 탭 없으면 추가 후 DB에서 이전 대화 로드
+    - closeTab(): 탭 제거, 활성 탭이 닫히면 인접 탭으로 이동
+    - clearTab(): confirm 후 DB + 로컬 상태 초기화
+    - askInTab(): 낙관적 업데이트 → POST /documents/{id}/ask → AI 응답 추가
 
 
 ----------------------------------------------------------------
-5. components/ - UI 컴포넌트
+6. utils/ - 유틸리티
 ----------------------------------------------------------------
+
+[apiError.ts]  ← 신규
+  getApiErrorDetail(err: unknown): string
+    - Axios 에러 응답에서 detail 메시지를 타입 안전하게 추출.
+    - catch (err: any) 방식 대신 catch (err: unknown)으로 타입 안전하게 사용 가능.
+    - 사용 예: const detail = getApiErrorDetail(err);
+               if (detail.includes('학번')) { ... }
+
+
+----------------------------------------------------------------
+7. components/ - UI 컴포넌트
+----------------------------------------------------------------
+
+[AuthScreen.tsx]  ← 신규
+  역할: 로그인 모달 (비로그인 상태에서 인증이 필요한 액션 시 표시)
+
+  Props: onSuccess(user), onClose(optional)
+    - onClose가 있으면 X 버튼과 배경 클릭으로 닫기 가능
+    - 회원가입은 /register 페이지 링크로 이동 (탭 방식 제거)
+
+  동작:
+    - 로그인 성공 시 onSuccess(user) 호출 → useAuth.saveUser()로 저장
 
 [Sidebar.tsx]
   위치: 화면 좌측 고정 (w-64)
+  Props: userName, userStudentId, ... (userId prop 제거됨)
 
   구성 요소 (위→아래 순서):
     - VibeLRS 로고 (클릭 시 홈으로 이동)
     - '내 보관함' 버튼
     - '새 대화 시작' 버튼 → 인라인 입력폼으로 전환
-      * Enter 또는 '만들기' 클릭으로 채팅방 생성, Escape로 취소
-    - Categories 섹션 (접기/펼치기, ChevronDown 아이콘)
-      * 카테고리 클릭 시 해당 폴더 필터링
-    - Recent Chats 섹션: 채팅 세션 목록, 현재 세션 하이라이트
-      * hover 시 삭제(휴지통) 버튼 표시
-    - 하단 프로필 영역: 학번 표시
-
-  ※ 순서: Categories가 Recent Chats 위에 위치 (텍스트 내역이 아래)
+    - Categories 섹션 (접기/펼치기)
+    - Recent Chats 섹션
+    - 하단 프로필 영역:
+      * 로그인 상태: 이름 + 학번 표시
+      * 미로그인 상태: "로그인 하세요" 텍스트 표시
 
 [ExplorerView.tsx]
   역할: 문서 탐색기 화면
 
   구성 요소:
-    - '새 폴더' 버튼 → 인라인 입력폼으로 전환
+    - '새 폴더' 버튼 → 인라인 입력폼
     - 폴더 그리드 (selectedCategoryId가 null일 때만 표시)
-      * 카테고리별 카드, 포함 문서 수 표시
-      * hover 시 업로드 아이콘 버튼 → 해당 폴더 선택된 채로 업로드 모달 열림
-      * hover 시 삭제 버튼 (폴더 내 파일도 일괄 삭제 경고 후 실행)
+      * hover 시 업로드 아이콘 + 삭제 버튼
     - 문서 테이블
-      * 특정 폴더 내부에서 헤더에 '파일 추가' 버튼 표시
-      * 파일명(클릭 시 DocumentViewerPane 탭으로 열림), 카테고리, 상태 배지
-      * 우측에 삭제(빨간 휴지통) 버튼만 표시 (질문하기 버튼 제거됨)
-    - StatusBadge: COMPLETED(초록), PENDING(노란색+회전), FAILED(빨간색)
+      * 파일명 클릭 시 DocumentViewerPane 탭으로 열림
+      * StatusBadge: COMPLETED(초록), PENDING(노란색+회전), FAILED(빨간색)
 
 [ChatView.tsx]
   역할: 세션 기반 AI 채팅 화면
 
   구성 요소:
-    - 메시지 목록
-      * USER 메시지: 우측 정렬, 인디고 배경, plain text
-      * AI 메시지: 좌측 정렬, 흰 배경
-                   ReactMarkdown + remark-math + rehype-katex 렌더링
-                   → **볼드**, 목록, $수식$, $$블록수식$$ 지원
-      * AI 메시지 하단: sources가 있으면 '참고 자료' 배지 목록 표시
-        (카테고리 › 파일명 형식)
-      * AI 응답 대기 중: 로딩 스피너
-    - 입력창 (화면 하단 fixed 고정)
-      * Enter 전송, Shift+Enter 줄바꿈
-      * 세션 미선택 또는 응답 대기 중이면 비활성화
-      * 포커스 시 그라데이션 테두리 효과
+    - USER 메시지: 우측, 인디고 배경, plain text
+    - AI 메시지: 좌측, ReactMarkdown + remark-math + rehype-katex 렌더링
+    - AI 메시지 하단: sources가 있으면 '참고 자료' 배지 표시
+    - 입력창: Enter 전송, Shift+Enter 줄바꿈
 
 [DocumentViewerPane.tsx]
   역할: 문서 뷰어 + 우측 미니 채팅 패널
 
-  Props: documentId, messages, isAsking, onSend, onClear
-
   구성 요소:
-    - 좌측: 문서 뷰어 영역
-      * PDF면 signed_url로 <iframe> 렌더링
-      * 그 외 텍스트를 <pre>로 표시
-    - 우측: 미니 채팅 패널 (w-96, 접기/펼치기 가능)
-      * 헤더: 접기 버튼 + 'AI에게 물어보기' 타이틀
-              대화 내역이 있을 때 우측에 초기화(휴지통) 버튼 표시
-      * 메시지 목록: user(인디고 말풍선) / ai(회색 말풍선)
-                     AI 메시지는 ReactMarkdown 렌더링 (출처 표시 없음)
-      * 입력창: Enter 전송, Shift+Enter 줄바꿈
-    - 탭 열 때 DB에서 이전 대화 내역 자동 로드
-    - 초기화 버튼 클릭 → confirm 후 DB + 로컬 상태 모두 삭제
+    - 좌측: PDF→<iframe>, 그 외→<pre>
+    - 우측: 미니 채팅 패널 (접기/펼치기)
+      * 대화 내역 있으면 초기화 버튼 표시
+      * AI 메시지 ReactMarkdown 렌더링 (출처 표시 없음)
 
 [UploadModal.tsx]
-  역할: 파일 업로드 다이얼로그 + 업로드 상태 오버레이
-
   uploadStatus: null | 'uploading' | 'analyzing'
-
-  세 가지 상태:
-    (1) uploadStatus=null : 업로드 다이얼로그
-        - 폴더 선택 콤보박스 (initialCategoryId로 초기값 지정 가능)
-        - 파일 드롭존: 드래그&드롭 또는 클릭 선택
-        - 파일 선택 전 업로드 버튼 비활성화
-    (2) uploadStatus='uploading' : "파일을 저장하는 중..." 오버레이
-    (3) uploadStatus='analyzing' : "AI가 문서를 분석하는 중..." 오버레이
-        - 폴링으로 parsing_status가 COMPLETED가 될 때까지 대기
+    (1) null: 업로드 다이얼로그 (폴더 선택 + 파일 드롭존)
+    (2) uploading: "파일을 저장하는 중..." 오버레이
+    (3) analyzing: "AI가 문서를 분석하는 중..." 오버레이
 
 
 ----------------------------------------------------------------
-6. app/page.tsx - 최상위 조립 컴포넌트
+8. app/ - 페이지
 ----------------------------------------------------------------
 
-  page.tsx는 훅과 컴포넌트를 연결하는 조립 역할만 한다.
+[page.tsx] - 루트 페이지 (/)
+  훅: useAuth, useAppData, useChat, useDocumentTabs (탭 관리 분리)
 
-  상태 관리:
-    - viewMode ('explorer' | 'chat')
-    - selectedCategoryId
-    - uploadStatus ('uploading' | 'analyzing' | null)
-    - uploadModalOpen, uploadInitialCategoryId, uploadShowFolderSelect
-    - tabs: OpenTab[]         (열려 있는 문서 탭 목록)
-    - activeTabId: number | null
-    - useAppData → categories, documents, sessions
-    - useChat → messages, currentSessionId, isAsking, loadMessages
+  핵심 패턴:
+  - requireAuth(action): 미로그인 시 로그인 모달 표시, 로그인 시 action 실행
+  - 모든 페이지 이동은 useRouter().push() 사용 (window.location.href 금지)
 
-  주요 이벤트 핸들러:
-    openDocumentTab(documentId, filename)
-      - 탭이 없으면 새로 추가 (messages: [])
-      - DB에서 이전 대화 내역 로드 후 탭 상태 업데이트
-
-    closeTab(documentId)
-      - 탭 제거, 활성 탭이 닫히면 인접 탭으로 이동
-
-    handleDocumentAsk(documentId, content)
-      - 로컬 상태에 user 메시지 즉시 추가 (낙관적)
-      - askAboutDocument() 호출 후 AI 응답 추가
-
-    handleDocumentChatClear(documentId)
-      - confirm 후 clearDocumentChat() + 로컬 messages 초기화
-
-    handleUpload(file, categoryId)
-      - 'uploading' → uploadDocument() → 'analyzing'
-      - pollDocumentStatus()로 최대 3분 COMPLETED 대기
-      - 완료 후 null, refresh()
-
-    handleSessionClick, handleNewSession, handleSessionDelete
-      - 세션 전환, 생성, 삭제
-
-    handleSend(content)
-      - 현재 카테고리의 document_ids 계산 후 sendMessage() 호출
+  헤더 구성:
+    로그인 상태:   [자료 업로드] [유저이름(마이페이지 이동)] [로그아웃]
+    미로그인 상태: [로그인 하세요] [자료 업로드] [로그인] [회원가입]
 
   레이아웃:
     - 좌측: <Sidebar />
-    - 우측 상단: 헤더 (breadcrumb + '자료 업로드' 버튼)
-    - 탭 바: 열린 문서 탭 목록 (FileText 아이콘 + X 닫기)
-    - 콘텐츠:
-      * activeTabId != null → <DocumentViewerPane />
-      * explorer 뷰 → <ExplorerView />
-      * chat 뷰 → <ChatView />
-    - 오버레이: uploadModalOpen 또는 uploadStatus != null → <UploadModal />
+    - 우측 상단: 헤더
+    - 탭 바: 열린 문서 탭
+    - 콘텐츠: activeTabId → DocumentViewerPane / explorer → ExplorerView / chat → ChatView
+    - 오버레이: UploadModal, AuthScreen
+
+  pollDocumentStatus(documentId):
+    - POLL_INTERVAL_MS(2초) 간격, POLL_MAX_WAIT_MS(3분) 제한으로 폴링
+    - COMPLETED → resolve / FAILED → reject / 타임아웃 → reject
+
+[register/page.tsx] - 회원가입 페이지 (/register)
+  필드 순서: 아이디(+중복확인) → 비밀번호 → 비밀번호 확인 → 이름 → 학번
+  유효성 검사:
+    - 아이디: 필수 + 중복확인 완료 필수
+    - 비밀번호: 6자 이상
+    - 비밀번호 확인: 일치
+    - 이름: 필수 + NAME_REGEX (한글/영문/공백만 허용)
+    - 학번: 필수 (중복은 서버 응답으로 처리)
+  중복확인 UX:
+    - idle: 에러 메시지 표시 가능
+    - available: 초록 "사용 가능" 메시지
+    - taken: 빨간 "이미 사용 중" 메시지
+    - 아이디 수정 시 즉시 idle로 리셋
+  성공 시: localStorage에 저장 → router.push('/')
+
+[mypage/page.tsx] - 마이페이지 (/mypage)
+  - 로그인 정보 표시 (아이디, 이름, 학번) - 읽기 전용
+  - "사용자 정보 수정" 버튼 → /mypage/edit 이동
+  - 비밀번호 변경 폼 (6자 이상, 확인 일치 검사)
+  - 미로그인 시 / 로 redirect
+
+[mypage/edit/page.tsx] - 정보 수정 페이지 (/mypage/edit)
+  필드 순서: 아이디(+중복확인) → 이름 → 학번
+  - original 상태를 기억해서 변경된 필드만 API로 전송
+  - hasChanged(): 변경사항 없으면 DB 호출 없이 뒤로 이동
+  - 아이디 변경 시에만 중복확인 필요 (기존 아이디 = same 상태)
+  - 서버 에러(학번/아이디 중복)는 getApiErrorDetail()로 파싱
 
 
 ----------------------------------------------------------------
-7. 전체 데이터 흐름 요약
+9. 인증 흐름
+----------------------------------------------------------------
+
+  저장소: localStorage (JWT 없음, User 객체 JSON 저장)
+  키: constants.ts의 STORAGE_KEY = 'vibe_user'
+
+  로그인:
+    AuthScreen → POST /auth/login → User 반환
+    → useAuth.saveUser() → localStorage + state 업데이트
+
+  로그아웃:
+    로그아웃 버튼 → useAuth.logout() → localStorage 삭제
+    → window.location.reload() (페이지 상태 완전 초기화)
+
+  페이지 보호:
+    mypage, mypage/edit: useEffect에서 localStorage 확인 → 없으면 router.push('/')
+    메인 기능(업로드, 채팅 등): requireAuth() 패턴으로 로그인 모달 유도
+
+  ※ 중요: 모든 페이지 이동은 router.push() 사용
+    window.location.href 사용 시 Next.js 라우터 히스토리가 깨져
+    브라우저 뒤로/앞으로 버튼이 동작하지 않게 됨.
+
+
+----------------------------------------------------------------
+10. 전체 데이터 흐름 요약
 ----------------------------------------------------------------
 
 [페이지 초기 로드]
   page.tsx 마운트
-    → useAppData: categories + documents + sessions 병렬 fetch (allSettled)
+    → useAuth: localStorage에서 user 복원
+    → useAppData: categories + documents + sessions 병렬 fetch
     → 각 컴포넌트에 props로 전달
 
 [파일 업로드]
-  '자료 업로드' or 폴더 업로드 아이콘 클릭
-    → UploadModal(다이얼로그) 표시
+  '자료 업로드' 또는 폴더 업로드 아이콘 클릭
+    → requireAuth() → UploadModal(다이얼로그) 표시
     → 폴더 + 파일 선택 후 '업로드'
     → uploadStatus='uploading' → POST /documents/upload
-    → uploadStatus='analyzing' → polling (2초 간격, 최대 3분)
+    → uploadStatus='analyzing' → polling (POLL_INTERVAL_MS 간격, 최대 POLL_MAX_WAIT_MS)
     → COMPLETED → uploadStatus=null, refresh()
 
 [문서 열기]
   파일명 클릭
-    → openDocumentTab() → 탭 추가 + activeTabId 설정
+    → useDocumentTabs.openTab() → 탭 추가 + activeTabId 설정
     → GET /documents/{id}/chat → 이전 대화 내역 로드
     → DocumentViewerPane 렌더링
 
 [문서 미니 채팅]
   입력창에 질문 입력 후 전송
-    → handleDocumentAsk() → 로컬에 user 메시지 즉시 추가
-    → POST /documents/{id}/ask (history는 백엔드가 DB에서 로드)
-    → AI 응답 + sources를 로컬 상태에 추가
+    → useDocumentTabs.askInTab() → 로컬에 user 메시지 즉시 추가
+    → POST /documents/{id}/ask → AI 응답 추가
 
 [세션 채팅]
   사이드바에서 세션 선택 또는 새 세션 생성
-    → loadMessages() → GET /chat/messages/{sessionId}
-    → 입력창에 질문 → sendMessage() → 낙관적 업데이트
+    → useChat.loadMessages() → 메시지 초기화 후 GET /chat/messages/{sessionId}
+    → 입력창에 질문 → useChat.sendMessage() → 낙관적 업데이트
     → POST /chat/ask → AI 응답(sources 포함) 추가
 
 
 ----------------------------------------------------------------
-8. 주요 외부 의존성
+11. 주요 외부 의존성
 ----------------------------------------------------------------
 
   next                    : App Router 프레임워크
