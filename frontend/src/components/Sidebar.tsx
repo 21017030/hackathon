@@ -5,7 +5,6 @@ import { Plus, MessageSquare, Folder, User, HardDrive, ChevronDown, Trash2 } fro
 import type { Category, ChatSession, ViewMode } from '@/types';
 
 interface Props {
-  userId: string;
   userName: string;
   userStudentId: string;
   sessions: ChatSession[];
@@ -21,7 +20,6 @@ interface Props {
 }
 
 export default function Sidebar({
-  userId: _userId,
   userName,
   userStudentId,
   sessions,

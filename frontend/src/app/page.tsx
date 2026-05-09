@@ -17,6 +17,7 @@ import { useDocumentTabs } from '@/hooks/useDocumentTabs';
 import { uploadDocument, deleteDocument, getDocuments } from '@/api/documents';
 import { createCategory, deleteCategory } from '@/api/categories';
 import { createSession, deleteSession } from '@/api/chat';
+import { POLL_INTERVAL_MS, POLL_MAX_WAIT_MS } from '@/constants';
 import type { ViewMode } from '@/types';
 
 export default function App() {
@@ -52,17 +53,16 @@ export default function App() {
 
   const pollDocumentStatus = (documentId: number): Promise<void> =>
     new Promise((resolve, reject) => {
-      const MAX_WAIT = 3 * 60 * 1000;
       const start = Date.now();
       const check = async () => {
-        if (Date.now() - start > MAX_WAIT) { reject(new Error('시간 초과')); return; }
+        if (Date.now() - start > POLL_MAX_WAIT_MS) { reject(new Error('시간 초과')); return; }
         const docs = await getDocuments(userId);
         const doc = docs.find(d => d.id === documentId);
         if (doc?.parsing_status === 'COMPLETED') resolve();
         else if (doc?.parsing_status === 'FAILED') reject(new Error('분석 실패'));
-        else setTimeout(check, 2000);
+        else setTimeout(check, POLL_INTERVAL_MS);
       };
-      setTimeout(check, 2000);
+      setTimeout(check, POLL_INTERVAL_MS);
     });
 
   const handleUpload = async (file: File, categoryId: number | null) => {
@@ -180,7 +180,6 @@ export default function App() {
   return (
     <div className="flex h-screen bg-[#F8F9FB] text-gray-800 font-sans">
       <Sidebar
-        userId={userId}
         userName={user?.name ?? ''}
         userStudentId={user?.student_id ?? ''}
         sessions={sessions}

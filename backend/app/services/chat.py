@@ -5,7 +5,7 @@ from google.genai import types
 
 from fastapi import HTTPException
 from app.core.supabase import supabase
-from app.core.gemini import client, CHAT_MODEL, REWRITE_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+from app.core.gemini import client, CHAT_MODEL, REWRITE_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, RAG_CHUNK_LIMIT, HISTORY_LIMIT, REWRITE_HISTORY_WINDOW
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ def _rewrite_query(content: str, history: list) -> str:
     """대화 맥락을 반영해 팔로업 질문을 독립적인 검색 쿼리로 재작성."""
     if not history:
         return content
-    recent = history[-4:]
+    recent = history[-REWRITE_HISTORY_WINDOW:]
     history_str = "\n".join([
         f"{'사용자' if m.get('sender_type') == 'USER' or m.get('sender') == 'user' else 'AI'}: {m.get('content', '')[:300]}"
         for m in recent
@@ -40,7 +40,7 @@ def _rewrite_query(content: str, history: list) -> str:
 async def get_relevant_chunks_with_sources(
     query_vector: List[float],
     document_ids: Optional[List[int]] = None,
-    limit: int = 6,
+    limit: int = RAG_CHUNK_LIMIT,
 ) -> list:
     chunks = await get_relevant_chunks(query_vector, document_ids, limit)
     if not chunks:
@@ -103,7 +103,7 @@ def _filter_used_sources(ai_answer: str, all_sources: list) -> tuple[str, list]:
     return cleaned, filtered
 
 
-async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[List[int]] = None, limit: int = 6):
+async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[List[int]] = None, limit: int = RAG_CHUNK_LIMIT):
     try:
         rpc_params = {
             "query_embedding": query_vector,
@@ -123,7 +123,7 @@ async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[
 
 # ── ask_question 보조 함수 ─────────────────────────────────────
 
-def _load_history(session_id: int, limit: int = 6) -> list:
+def _load_history(session_id: int, limit: int = HISTORY_LIMIT) -> list:
     res = supabase.table("chat_messages") \
         .select("*") \
         .eq("session_id", session_id) \
@@ -244,7 +244,7 @@ async def ask_about_document(document_id: int, content: str) -> dict:
             .select("sender_type, content") \
             .eq("document_id", document_id) \
             .order("created_at", desc=True) \
-            .limit(6) \
+            .limit(HISTORY_LIMIT) \
             .execute()
         history = history_res.data[::-1]
 

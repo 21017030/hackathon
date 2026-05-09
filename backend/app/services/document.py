@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from app.core.config import MAX_FILE_SIZE
 from app.core.supabase import supabase
-from app.core.gemini import client, CHAT_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+from app.core.gemini import client, CHAT_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, CHUNK_SIZE
 
 MAGIC_NUMBERS = {
     ".pdf": b"%PDF",
@@ -148,8 +148,7 @@ async def process_document_rag(document_id: int):
             raise Exception("추출된 텍스트가 없습니다.")
 
         # 4. 청킹
-        chunk_size = 1000  # Gemini는 컨텍스트 윈도우가 크므로 약간 더 크게 잡아도 좋습니다.
-        chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+        chunks = [text[i:i + CHUNK_SIZE] for i in range(0, len(text), CHUNK_SIZE)]
 
         # 5. 임베딩 생성 및 저장
         for i, chunk_content in enumerate(chunks):
