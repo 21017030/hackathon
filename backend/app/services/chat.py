@@ -9,10 +9,38 @@ from app.services.document import CHAT_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSI
 
 logger = logging.getLogger(__name__)
 
+
+def _rewrite_query(content: str, history: list) -> str:
+    """대화 맥락을 반영해 모호한 팔로업 질문을 독립적인 검색 쿼리로 재작성."""
+    if not history:
+        return content
+    recent = history[-4:]
+    history_str = "\n".join([
+        f"{'사용자' if m.get('sender_type') == 'USER' or m.get('sender') == 'user' else 'AI'}: {m.get('content', '')[:300]}"
+        for m in recent
+    ])
+    prompt = f"""아래 대화 내역을 참고하여 사용자의 질문을 문서 검색에 적합한 독립적인 쿼리로 변환하세요.
+변환된 쿼리만 한 줄로 출력하세요.
+
+대화 내역:
+{history_str}
+
+현재 질문: {content}
+
+검색 쿼리:"""
+    try:
+        response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
+        rewritten = (response.text or "").strip()
+        logger.info(f"쿼리 재작성: '{content}' → '{rewritten}'")
+        return rewritten or content
+    except Exception:
+        return content
+
+
 async def get_relevant_chunks_with_sources(
     query_vector: List[float],
     document_ids: Optional[List[int]] = None,
-    limit: int = 8,
+    limit: int = 6,
 ) -> list:
     chunks = await get_relevant_chunks(query_vector, document_ids, limit)
     if not chunks:
@@ -65,11 +93,11 @@ def _extract_sources(chunks: list) -> list:
     return sources
 
 
-async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[List[int]] = None, limit: int = 5):
+async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[List[int]] = None, limit: int = 6):
     try:
         rpc_params = {
             "query_embedding": query_vector,
-            "match_threshold": 0.2,
+            "match_threshold": 0.5,
             "match_count": limit,
         }
         if document_ids:
@@ -80,8 +108,8 @@ async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[
         return res.data
     except Exception as e:
         logger.error(f"Vector search failed: {str(e)}")
-        # RPC 함수가 없으면 여기서 에러가 납니다.
         return []
+
 
 async def ask_question(session_id: int, content: str, document_ids: Optional[List[int]] = None):
     try:
@@ -93,11 +121,21 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
             "content": content
         }).execute()
 
-        # 2. 질문 임베딩 생성
-        logger.info(f"Generating embedding for question using {EMBEDDING_MODEL}")
+        # 2. 과거 대화 내역 먼저 가져오기 (쿼리 재작성에 필요)
+        history_res = supabase.table("chat_messages") \
+            .select("*") \
+            .eq("session_id", session_id) \
+            .order("created_at", desc=True) \
+            .limit(6) \
+            .execute()
+        history = history_res.data[::-1]
+
+        # 3. 쿼리 재작성 + 임베딩
+        search_query = _rewrite_query(content, history)
+        logger.info(f"Generating embedding using {EMBEDDING_MODEL}")
         embedding_res = client.models.embed_content(
             model=EMBEDDING_MODEL,
-            contents=content,
+            contents=search_query,
             config=types.EmbedContentConfig(
                 task_type="retrieval_query",
                 output_dimensionality=EMBEDDING_DIMENSIONS,
@@ -105,29 +143,18 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         )
         query_vector = embedding_res.embeddings[0].values
 
-        # 3. 관련 텍스트 조각 검색 (Vector Search)
+        # 4. 관련 청크 검색
         chunks = await get_relevant_chunks_with_sources(query_vector, document_ids)
         context = _build_context(chunks)
         sources = _extract_sources(chunks)
         logger.info(f"Found {len(chunks)} relevant chunks.")
 
-        # 4. 과거 대화 내역 가져오기
-        history_res = supabase.table("chat_messages") \
-            .select("*") \
-            .eq("session_id", session_id) \
-            .order("created_at", desc=True) \
-            .limit(5) \
-            .execute()
-        
-        history = history_res.data[::-1]
+        # 5. 프롬프트 생성 및 답변
         history_str = "\n".join([f"{m['sender_type']}: {m['content']}" for m in history])
-
-        # 5. Gemini 2.0에게 프롬프트 전달
-        logger.info(f"Prompting Gemini model: {CHAT_MODEL}")
-        prompt = f"""
-당신은 대학생의 학습을 돕는 유능한 AI 어시스턴트입니다. 
-제공된 [강의자료 내용]을 바탕으로 사용자의 질문에 답변하세요. 
-만약 자료에서 답을 찾을 수 없다면, 자료에 없는 내용이라고 솔직하게 말하세요.
+        prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
+제공된 [강의자료 내용]을 바탕으로 사용자의 질문에 답변하세요.
+자료에서 답을 찾을 수 없다면 솔직하게 말하세요.
+출처는 답변에 실제로 사용한 내용에서만 표시하세요.
 
 [강의자료 내용]
 {context}
@@ -137,13 +164,10 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
 
 사용자 질문: {content}
 
-답변:
-"""
-        
-        response = client.models.generate_content(
-            model=CHAT_MODEL,
-            contents=prompt,
-        )
+답변:"""
+
+        logger.info(f"Prompting Gemini model: {CHAT_MODEL}")
+        response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
         ai_answer = response.text
 
         # 6. AI 답변 저장
@@ -166,9 +190,12 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
 
 
 async def ask_about_document(document_id: int, content: str, history: list = None) -> dict:
+    # 쿼리 재작성
+    search_query = _rewrite_query(content, history or [])
+
     embedding_res = client.models.embed_content(
         model=EMBEDDING_MODEL,
-        contents=content,
+        contents=search_query,
         config=types.EmbedContentConfig(
             task_type="retrieval_query",
             output_dimensionality=EMBEDDING_DIMENSIONS,
@@ -191,6 +218,7 @@ async def ask_about_document(document_id: int, content: str, history: list = Non
     prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
 아래 [문서 내용]을 바탕으로 질문에 간결하게 답변하세요.
 자료에 없는 내용은 솔직하게 모른다고 말하세요.
+출처는 답변에 실제로 사용한 내용에서만 표시하세요.
 
 [문서 내용]
 {context}
