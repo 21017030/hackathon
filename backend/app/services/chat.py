@@ -203,10 +203,25 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         raise e
 
 
-async def ask_about_document(document_id: int, content: str, history: list = None) -> dict:
-    # 쿼리 재작성
-    search_query = _rewrite_query(content, history or [])
+async def ask_about_document(document_id: int, content: str) -> dict:
+    # 1. 사용자 메시지 저장
+    supabase.table("document_chat_messages").insert({
+        "document_id": document_id,
+        "sender_type": "USER",
+        "content": content,
+    }).execute()
 
+    # 2. 대화 내역 DB에서 로드
+    history_res = supabase.table("document_chat_messages") \
+        .select("sender_type, content") \
+        .eq("document_id", document_id) \
+        .order("created_at", desc=True) \
+        .limit(6) \
+        .execute()
+    history = history_res.data[::-1]
+
+    # 3. 쿼리 재작성 + 임베딩
+    search_query = _rewrite_query(content, history)
     embedding_res = client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=search_query,
@@ -221,13 +236,10 @@ async def ask_about_document(document_id: int, content: str, history: list = Non
     context = _build_context(chunks)
     sources = _extract_sources(chunks)
 
-    history_str = ""
-    if history:
-        lines = [
-            f"{'사용자' if m.get('sender') == 'user' else 'AI'}: {m.get('content', '')}"
-            for m in history[-5:]
-        ]
-        history_str = "\n".join(lines)
+    history_str = "\n".join([
+        f"{'사용자' if m['sender_type'] == 'USER' else 'AI'}: {m['content'][:300]}"
+        for m in history
+    ])
 
     filenames = "|".join(s['filename'] for s in sources)
     prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
@@ -250,6 +262,15 @@ async def ask_about_document(document_id: int, content: str, history: list = Non
 
     response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
     answer, sources = _filter_used_sources(response.text, sources)
+
+    # 4. AI 답변 저장
+    supabase.table("document_chat_messages").insert({
+        "document_id": document_id,
+        "sender_type": "AI",
+        "content": answer,
+        "sources": sources,
+    }).execute()
+
     return {"answer": answer, "sources": sources}
 
 

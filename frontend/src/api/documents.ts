@@ -35,11 +35,23 @@ export async function getDocumentView(documentId: number): Promise<DocumentView>
   return res.data;
 }
 
+export async function getDocumentChat(documentId: number): Promise<SimpleMessage[]> {
+  const res = await client.get(`/documents/${documentId}/chat`);
+  return (res.data as any[]).map(m => ({
+    sender: m.sender_type === 'USER' ? 'user' : 'ai',
+    content: m.content,
+    sources: m.sources ?? [],
+  }));
+}
+
+export async function clearDocumentChat(documentId: number): Promise<void> {
+  await client.delete(`/documents/${documentId}/chat`);
+}
+
 export async function askAboutDocument(
   documentId: number,
   content: string,
-  history: SimpleMessage[] = [],
 ): Promise<{ answer: string; sources: Source[] }> {
-  const res = await client.post(`/documents/${documentId}/ask`, { content, history });
+  const res = await client.post(`/documents/${documentId}/ask`, { content });
   return { answer: res.data.answer, sources: res.data.sources ?? [] };
 }

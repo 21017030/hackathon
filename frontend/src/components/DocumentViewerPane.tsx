@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Loader2, Send, ChevronRight, ChevronLeft, Bot, FileText } from 'lucide-react';
+import { Loader2, Send, ChevronRight, ChevronLeft, Bot, FileText, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -14,9 +14,10 @@ interface Props {
   messages: SimpleMessage[];
   isAsking: boolean;
   onSend: (content: string) => void;
+  onClear: () => void;
 }
 
-export default function DocumentViewerPane({ documentId, messages, isAsking, onSend }: Props) {
+export default function DocumentViewerPane({ documentId, messages, isAsking, onSend, onClear }: Props) {
   const [view, setView] = useState<DocumentView | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(true);
@@ -85,9 +86,20 @@ export default function DocumentViewerPane({ documentId, messages, isAsking, onS
             {chatOpen ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
           {chatOpen && (
-            <div className="flex items-center gap-2">
-              <Bot size={17} className="text-indigo-500 shrink-0" />
-              <span className="font-bold text-sm text-gray-700">AI에게 물어보기</span>
+            <div className="flex items-center justify-between flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <Bot size={17} className="text-indigo-500 shrink-0" />
+                <span className="font-bold text-sm text-gray-700">AI에게 물어보기</span>
+              </div>
+              {messages.length > 0 && (
+                <button
+                  onClick={onClear}
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors shrink-0"
+                  title="채팅 초기화"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
           )}
         </div>

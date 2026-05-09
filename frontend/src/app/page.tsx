@@ -10,7 +10,7 @@ import UploadModal from '@/components/UploadModal';
 import DocumentViewerPane from '@/components/DocumentViewerPane';
 import { useAppData } from '@/hooks/useAppData';
 import { useChat } from '@/hooks/useChat';
-import { uploadDocument, deleteDocument, askAboutDocument, getDocuments } from '@/api/documents';
+import { uploadDocument, deleteDocument, askAboutDocument, getDocuments, getDocumentChat, clearDocumentChat } from '@/api/documents';
 import { createCategory, deleteCategory } from '@/api/categories';
 import { createSession, deleteSession } from '@/api/chat';
 import type { ViewMode, OpenTab } from '@/types';
@@ -33,12 +33,28 @@ export default function App() {
   const { messages, currentSessionId, setCurrentSessionId, sendMessage, isAsking, loadMessages } = useChat();
 
   // ── 문서 탭 관리 ──────────────────────────────────────────
-  const openDocumentTab = (documentId: number, filename: string) => {
+  const openDocumentTab = async (documentId: number, filename: string) => {
+    setActiveTabId(documentId);
     setTabs(prev => {
       if (prev.find(t => t.documentId === documentId)) return prev;
       return [...prev, { documentId, filename, messages: [], isAsking: false }];
     });
-    setActiveTabId(documentId);
+    try {
+      const messages = await getDocumentChat(documentId);
+      setTabs(prev => prev.map(t => t.documentId === documentId ? { ...t, messages } : t));
+    } catch {
+      // 로드 실패 시 빈 상태 유지
+    }
+  };
+
+  const handleDocumentChatClear = async (documentId: number) => {
+    if (!confirm('채팅 내역을 초기화하시겠습니까?')) return;
+    try {
+      await clearDocumentChat(documentId);
+      setTabs(prev => prev.map(t => t.documentId === documentId ? { ...t, messages: [] } : t));
+    } catch {
+      alert('초기화에 실패했습니다.');
+    }
   };
 
   const closeTab = (documentId: number) => {
@@ -54,13 +70,12 @@ export default function App() {
   };
 
   const handleDocumentAsk = async (documentId: number, content: string) => {
-    const history = tabs.find(t => t.documentId === documentId)?.messages ?? [];
     setTabs(prev => prev.map(t => t.documentId === documentId
       ? { ...t, messages: [...t.messages, { sender: 'user', content }], isAsking: true }
       : t
     ));
     try {
-      const { answer, sources } = await askAboutDocument(documentId, content, history);
+      const { answer, sources } = await askAboutDocument(documentId, content);
       setTabs(prev => prev.map(t => t.documentId === documentId
         ? { ...t, messages: [...t.messages, { sender: 'ai', content: answer, sources }], isAsking: false }
         : t
@@ -275,6 +290,7 @@ export default function App() {
               messages={activeTab.messages}
               isAsking={activeTab.isAsking}
               onSend={(content) => handleDocumentAsk(activeTabId, content)}
+              onClear={() => handleDocumentChatClear(activeTabId)}
             />
           </div>
         ) : (

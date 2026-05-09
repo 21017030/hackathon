@@ -11,6 +11,7 @@ from app.services.document import (
     get_document_view,
 )
 from app.services.chat import ask_about_document
+from app.core.supabase import supabase
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -60,14 +61,30 @@ def view_document(document_id: int):
     return get_document_view(document_id)
 
 
+@router.get("/{document_id}/chat")
+def get_document_chat(document_id: int):
+    res = supabase.table("document_chat_messages") \
+        .select("id, sender_type, content, sources, created_at") \
+        .eq("document_id", document_id) \
+        .order("created_at", desc=False) \
+        .execute()
+    return res.data or []
+
+
+@router.delete("/{document_id}/chat", status_code=204)
+def clear_document_chat(document_id: int):
+    supabase.table("document_chat_messages") \
+        .delete() \
+        .eq("document_id", document_id) \
+        .execute()
+
+
 @router.post("/{document_id}/ask")
 async def ask_document(document_id: int, body: dict):
     content = body.get("content", "").strip()
     if not content:
         raise HTTPException(status_code=400, detail="질문을 입력해주세요.")
-    history = body.get("history", [])
-    answer = await ask_about_document(document_id, content, history)
-    return {"answer": answer}
+    return await ask_about_document(document_id, content)
 
 
 @router.delete("/{document_id}", status_code=204)
