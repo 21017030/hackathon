@@ -550,3 +550,29 @@
            hooks/useRequireAuth.ts(신규), components/FolderGrid.tsx(신규),
            components/DocumentTable.tsx(신규), components/ExplorerView.tsx(축소),
            app/mypage/page.tsx, app/mypage/edit/page.tsx
+
+
+----------------------------------------------------------------
+[수정 25] 앱 외부에서 앞으로 버튼 진입 시 화면 동결 문제
+----------------------------------------------------------------
+
+문제:
+  메인 화면(/)에서 뒤로 버튼을 누르면 앱 외부(빈 탭, 이전 사이트 등)로 이동.
+  그 상태에서 앞으로 버튼을 누르면 Next.js 앱으로 돌아오지만 화면이 완전히 굳어버림.
+  콘솔 에러: "Router action dispatched before initialization"
+
+원인:
+  브라우저가 앞으로 버튼으로 앱에 재진입할 때 bfcache(Back-Forward Cache)에서
+  페이지를 그대로 복원함. 이 시점에 Next.js 라우터가 아직 초기화되지 않은 상태에서
+  브라우저 history 이벤트가 발생해 충돌.
+  (수정 19에서 window.location.href → router.push()로 교체했으나,
+   앱 외부 → 앱 재진입 경로는 별개의 bfcache 문제였음)
+
+수정 내용:
+  - BfcacheGuard.tsx 신규 생성
+    * pageshow 이벤트에서 e.persisted === true(bfcache 복원) 감지
+    * 감지 시 window.location.reload()로 강제 새로고침
+    * 강제 새로고침으로 Next.js 라우터를 깨끗하게 재초기화하여 충돌 방지
+  - layout.tsx에 <BfcacheGuard /> 전역 마운트 (모든 페이지에 자동 적용)
+
+수정 파일: components/BfcacheGuard.tsx(신규), app/layout.tsx

@@ -44,6 +44,7 @@ frontend/src/
 │   └── apiError.ts                # API 에러 응답에서 detail 추출 (타입 안전)
 │
 └── components/                    # UI 컴포넌트
+    ├── BfcacheGuard.tsx           # bfcache 복원 감지 후 강제 새로고침 (layout에 마운트)
     ├── AuthScreen.tsx             # 로그인 모달 (로그인 폼 + 회원가입 링크)
     ├── Sidebar.tsx                # 좌측 사이드바
     ├── ExplorerView.tsx           # 문서 탐색기 뷰 (FolderGrid + DocumentTable 조합)
@@ -215,6 +216,21 @@ frontend/src/
 ----------------------------------------------------------------
 7. components/ - UI 컴포넌트
 ----------------------------------------------------------------
+
+[BfcacheGuard.tsx]  ← 신규
+  역할: 브라우저 bfcache(Back-Forward Cache) 복원 시 Next.js 라우터 충돌 방지.
+        layout.tsx에 전역으로 마운트되어 모든 페이지에 적용됨.
+
+  동작:
+    - pageshow 이벤트 리스너 등록
+    - e.persisted === true이면 bfcache에서 복원된 것 → window.location.reload()
+    - 강제 새로고침으로 Next.js 라우터를 깨끗하게 재초기화
+    - UI 렌더링 없음 (return null)
+
+  ※ 발생 시나리오:
+    앱 외부 페이지(빈 탭 등)에서 앞으로 버튼으로 앱에 진입할 때
+    브라우저가 bfcache 복원 → 라우터 초기화 전에 history 이벤트 발생
+    → "Router action dispatched before initialization" 충돌 → 화면 동결
 
 [AuthScreen.tsx]  ← 신규
   역할: 로그인 모달 (비로그인 상태에서 인증이 필요한 액션 시 표시)
