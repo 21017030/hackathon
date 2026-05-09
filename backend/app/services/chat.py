@@ -184,19 +184,22 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
         ai_answer, sources = _filter_used_sources(response.text, sources)
 
+        if sources:
+            src_lines = "\n".join(f"- {s['category']} > {s['filename']}" for s in sources)
+            ai_answer = f"{ai_answer}\n\n**참고 자료**\n{src_lines}"
+
         # 6. AI 답변 저장
         logger.info("Saving AI response to DB")
         res = supabase.table("chat_messages").insert({
             "session_id": session_id,
             "sender_type": "AI",
             "content": ai_answer,
-            "sources": sources,
         }).execute()
 
         if not res.data:
             raise Exception("Failed to insert AI message into database")
 
-        return {"message": res.data[0], "sources": sources}
+        return {"message": res.data[0], "sources": []}
 
     except Exception as e:
         logger.exception(f"Error in ask_question: {str(e)}")
