@@ -22,3 +22,4 @@ class ChatMessageResponse(BaseModel):
     sender_type: str # 'USER' or 'AI'
     content: str
     created_at: datetime
+    sources: Optional[List] = []
