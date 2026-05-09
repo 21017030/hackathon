@@ -28,7 +28,7 @@ export async function checkLoginId(loginId: string): Promise<boolean> {
 
 export async function updateUser(
   userId: string,
-  data: { name?: string; password?: string },
+  data: { student_id?: string; name?: string; password?: string },
 ): Promise<User> {
   const res = await client.put(`/auth/users/${userId}`, data);
   return res.data;

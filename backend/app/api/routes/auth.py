@@ -28,4 +28,4 @@ def check_id(login_id: str):
 
 @router.put("/users/{user_id}", response_model=UserResponse)
 def update_profile(user_id: str, request: UpdateUserRequest):
-    return update_user(user_id, request.name, request.password)
+    return update_user(user_id, request.student_id, request.name, request.password)

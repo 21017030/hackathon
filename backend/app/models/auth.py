@@ -22,5 +22,6 @@ class UserResponse(BaseModel):
 
 
 class UpdateUserRequest(BaseModel):
+    student_id: Optional[str] = None
     name: Optional[str] = None
     password: Optional[str] = None

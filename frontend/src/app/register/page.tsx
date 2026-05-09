@@ -11,11 +11,11 @@ export default function RegisterPage() {
   const router = useRouter();
 
   const [form, setForm] = useState({
-    studentId: '',
-    name: '',
     loginId: '',
     password: '',
     passwordConfirm: '',
+    studentId: '',
+    name: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loginIdStatus, setLoginIdStatus] = useState<'idle' | 'available' | 'taken'>('idle');
@@ -37,6 +37,7 @@ export default function RegisterPage() {
     try {
       const available = await checkLoginId(form.loginId.trim());
       setLoginIdStatus(available ? 'available' : 'taken');
+      setErrors(e => ({ ...e, loginId: '' }));
     } catch {
       setLoginIdStatus('idle');
     } finally {
@@ -47,12 +48,6 @@ export default function RegisterPage() {
   const validate = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!form.studentId.trim()) newErrors.studentId = '학번을 입력해주세요.';
-    if (!form.name.trim()) {
-      newErrors.name = '이름을 입력해주세요.';
-    } else if (!NAME_REGEX.test(form.name.trim())) {
-      newErrors.name = '이름에 특수문자를 사용할 수 없습니다.';
-    }
     if (!form.loginId.trim()) {
       newErrors.loginId = '아이디를 입력해주세요.';
     } else if (loginIdStatus !== 'available') {
@@ -67,6 +62,12 @@ export default function RegisterPage() {
       newErrors.passwordConfirm = '비밀번호 확인을 입력해주세요.';
     } else if (form.password !== form.passwordConfirm) {
       newErrors.passwordConfirm = '비밀번호가 일치하지 않습니다.';
+    }
+    if (!form.studentId.trim()) newErrors.studentId = '학번을 입력해주세요.';
+    if (!form.name.trim()) {
+      newErrors.name = '이름을 입력해주세요.';
+    } else if (!NAME_REGEX.test(form.name.trim())) {
+      newErrors.name = '이름에 특수문자를 사용할 수 없습니다.';
     }
 
     setErrors(newErrors);
@@ -108,32 +109,6 @@ export default function RegisterPage() {
         <p className="text-center text-gray-500 text-sm mb-8">회원가입</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
-          {/* 학번 */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-gray-700">학번</label>
-            <input
-              type="text"
-              placeholder="학번을 입력하세요"
-              value={form.studentId}
-              onChange={e => set('studentId', e.target.value)}
-              className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.studentId ? 'border-red-400' : 'border-gray-200'}`}
-            />
-            {errors.studentId && <p className="text-red-500 text-xs">{errors.studentId}</p>}
-          </div>
-
-          {/* 이름 */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-semibold text-gray-700">이름</label>
-            <input
-              type="text"
-              placeholder="이름을 입력하세요"
-              value={form.name}
-              onChange={e => set('name', e.target.value)}
-              className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.name ? 'border-red-400' : 'border-gray-200'}`}
-            />
-            {errors.name && <p className="text-red-500 text-xs">{errors.name}</p>}
-          </div>
-
           {/* 아이디 + 중복확인 */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-semibold text-gray-700">아이디</label>
@@ -160,7 +135,7 @@ export default function RegisterPage() {
             {loginIdStatus === 'taken' && (
               <p className="text-red-500 text-xs">이미 사용 중인 아이디입니다.</p>
             )}
-            {errors.loginId && loginIdStatus !== 'taken' && (
+            {errors.loginId && loginIdStatus === 'idle' && (
               <p className="text-red-500 text-xs">{errors.loginId}</p>
             )}
           </div>
@@ -191,6 +166,32 @@ export default function RegisterPage() {
             {errors.passwordConfirm && (
               <p className="text-red-500 text-xs">{errors.passwordConfirm}</p>
             )}
+          </div>
+
+          {/* 학번 */}
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-semibold text-gray-700">학번</label>
+            <input
+              type="text"
+              placeholder="학번을 입력하세요"
+              value={form.studentId}
+              onChange={e => set('studentId', e.target.value)}
+              className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.studentId ? 'border-red-400' : 'border-gray-200'}`}
+            />
+            {errors.studentId && <p className="text-red-500 text-xs">{errors.studentId}</p>}
+          </div>
+
+          {/* 이름 */}
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-semibold text-gray-700">이름</label>
+            <input
+              type="text"
+              placeholder="이름을 입력하세요"
+              value={form.name}
+              onChange={e => set('name', e.target.value)}
+              className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.name ? 'border-red-400' : 'border-gray-200'}`}
+            />
+            {errors.name && <p className="text-red-500 text-xs">{errors.name}</p>}
           </div>
 
           {errors.form && <p className="text-red-500 text-xs text-center">{errors.form}</p>}

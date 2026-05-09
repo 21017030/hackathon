@@ -54,8 +54,12 @@ def login_user(login_id: str, password: str) -> dict:
     return {"id": user["id"], "student_id": user["student_id"], "login_id": user["login_id"], "name": user["name"]}
 
 
-def update_user(user_id: str, name: Optional[str] = None, password: Optional[str] = None) -> dict:
+def update_user(user_id: str, student_id: Optional[str] = None, name: Optional[str] = None, password: Optional[str] = None) -> dict:
     updates: dict = {}
+    if student_id is not None:
+        if supabase.table("users").select("id").eq("student_id", student_id).neq("id", user_id).execute().data:
+            raise HTTPException(status_code=409, detail="이미 등록된 학번입니다.")
+        updates["student_id"] = student_id
     if name is not None:
         updates["name"] = name
     if password is not None:
