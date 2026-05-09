@@ -22,13 +22,21 @@ export interface Message {
   sender_type: 'USER' | 'AI';
   content: string;
   created_at: string;
+  sources?: Source[];
 }
 
 export type ViewMode = 'chat' | 'explorer';
 
+export interface Source {
+  filename: string;
+  category: string;
+  page: number | null;
+}
+
 export interface SimpleMessage {
   sender: 'user' | 'ai';
   content: string;
+  sources?: Source[];
 }
 
 export interface OpenTab {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { MessageSquare, Send, Loader2 } from 'lucide-react';
+import { MessageSquare, Send, Loader2, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -50,14 +50,26 @@ export default function ChatView({ messages, currentSessionId, isAsking, onSend 
                 {msg.sender_type === 'USER' ? (
                   <p className="text-[15px] whitespace-pre-wrap">{msg.content}</p>
                 ) : (
-                  <div className="text-[15px] prose prose-sm max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-strong:font-semibold prose-ul:my-2 prose-li:my-0.5 prose-p:my-1">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkMath]}
-                      rehypePlugins={[rehypeKatex]}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
+                  <>
+                    <div className="text-[15px] prose prose-sm max-w-none prose-headings:font-bold prose-headings:text-gray-900 prose-strong:font-semibold prose-ul:my-2 prose-li:my-0.5 prose-p:my-1">
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <p className="text-[11px] font-bold text-gray-400 mb-2">참고 자료</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {msg.sources.map((src, i) => (
+                            <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[11px] font-bold">
+                              <FileText size={10} />
+                              <span>{src.category} › {src.filename}{src.page ? ` ${src.page}p` : ''}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

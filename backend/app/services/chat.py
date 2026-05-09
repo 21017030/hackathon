@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List, Optional
 from google.genai import types
 
@@ -7,6 +8,62 @@ from app.core.supabase import supabase
 from app.services.document import CHAT_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, client
 
 logger = logging.getLogger(__name__)
+
+async def get_relevant_chunks_with_sources(
+    query_vector: List[float],
+    document_ids: Optional[List[int]] = None,
+    limit: int = 5,
+) -> list:
+    chunks = await get_relevant_chunks(query_vector, document_ids, limit)
+    if not chunks:
+        return []
+
+    doc_ids = list({c['document_id'] for c in chunks})
+    docs_res = supabase.table("documents").select("id, original_file_name, category_id").in_("id", doc_ids).execute()
+    doc_map = {d['id']: d for d in (docs_res.data or [])}
+
+    cat_ids = list({d['category_id'] for d in doc_map.values() if d.get('category_id')})
+    cat_map = {}
+    if cat_ids:
+        cats_res = supabase.table("categories").select("id, name").in_("id", cat_ids).execute()
+        cat_map = {c['id']: c['name'] for c in (cats_res.data or [])}
+
+    for chunk in chunks:
+        doc = doc_map.get(chunk['document_id'], {})
+        chunk['filename'] = doc.get('original_file_name', '알 수 없음')
+        chunk['category'] = cat_map.get(doc.get('category_id'), '분류 없음')
+        match = re.search(r'\[(\d+)페이지\]', chunk.get('content', ''))
+        chunk['page'] = int(match.group(1)) if match else None
+
+    return chunks
+
+
+def _build_context(chunks: list) -> str:
+    if not chunks:
+        return "자료에서 관련 내용을 찾을 수 없습니다."
+    parts = []
+    for c in chunks:
+        label = f"[출처: {c['category']} > {c['filename']}"
+        if c.get('page'):
+            label += f" {c['page']}페이지"
+        label += "]"
+        parts.append(f"{label}\n{c['content']}")
+    return "\n\n".join(parts)
+
+
+def _extract_sources(chunks: list) -> list:
+    seen, sources = set(), []
+    for c in chunks:
+        key = (c.get('filename'), c.get('page'))
+        if key not in seen:
+            seen.add(key)
+            sources.append({
+                "filename": c.get('filename', '알 수 없음'),
+                "category": c.get('category', '분류 없음'),
+                "page": c.get('page'),
+            })
+    return sources
+
 
 async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[List[int]] = None, limit: int = 5):
     try:
@@ -49,13 +106,10 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         query_vector = embedding_res.embeddings[0].values
 
         # 3. 관련 텍스트 조각 검색 (Vector Search)
-        chunks = await get_relevant_chunks(query_vector, document_ids)
-        if not chunks:
-            logger.warning("No relevant document chunks found for the query.")
-            context = "자료에서 관련 내용을 찾을 수 없습니다."
-        else:
-            context = "\n\n".join([c['content'] for c in chunks])
-            logger.info(f"Found {len(chunks)} relevant chunks.")
+        chunks = await get_relevant_chunks_with_sources(query_vector, document_ids)
+        context = _build_context(chunks)
+        sources = _extract_sources(chunks)
+        logger.info(f"Found {len(chunks)} relevant chunks.")
 
         # 4. 과거 대화 내역 가져오기
         history_res = supabase.table("chat_messages") \
@@ -103,14 +157,14 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         if not res.data:
             raise Exception("Failed to insert AI message into database")
 
-        return res.data[0]
-        
+        return {"message": res.data[0], "sources": sources}
+
     except Exception as e:
         logger.exception(f"Error in ask_question: {str(e)}")
         raise e
 
 
-async def ask_about_document(document_id: int, content: str, history: list = None) -> str:
+async def ask_about_document(document_id: int, content: str, history: list = None) -> dict:
     embedding_res = client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=content,
@@ -121,8 +175,9 @@ async def ask_about_document(document_id: int, content: str, history: list = Non
     )
     query_vector = embedding_res.embeddings[0].values
 
-    chunks = await get_relevant_chunks(query_vector, [document_id])
-    context = "\n\n".join(c['content'] for c in chunks) if chunks else "관련 내용을 찾을 수 없습니다."
+    chunks = await get_relevant_chunks_with_sources(query_vector, [document_id])
+    context = _build_context(chunks)
+    sources = _extract_sources(chunks)
 
     history_str = ""
     if history:
@@ -147,7 +202,7 @@ async def ask_about_document(document_id: int, content: str, history: list = Non
 답변:"""
 
     response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
-    return response.text
+    return {"answer": response.text, "sources": sources}
 
 
 def delete_session(session_id: int) -> None:

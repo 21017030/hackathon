@@ -26,7 +26,7 @@ export async function askQuestion(
     content,
     document_ids: documentIds ?? null,
   });
-  return res.data;
+  return { ...res.data.message, sources: res.data.sources ?? [] };
 }
 
 export async function deleteSession(sessionId: number): Promise<void> {

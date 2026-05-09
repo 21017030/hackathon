@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Loader2, Send, ChevronRight, ChevronLeft, Bot } from 'lucide-react';
+import { Loader2, Send, ChevronRight, ChevronLeft, Bot, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -109,11 +109,26 @@ export default function DocumentViewerPane({ documentId, messages, isAsking, onS
                       : 'bg-gray-100 text-gray-800 rounded-tl-none'
                   }`}>
                     {msg.sender === 'ai' ? (
-                      <div className="prose prose-xs max-w-none prose-p:my-0.5 prose-ul:my-1 prose-li:my-0">
-                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                          {msg.content}
-                        </ReactMarkdown>
-                      </div>
+                      <>
+                        <div className="prose prose-xs max-w-none prose-p:my-0.5 prose-ul:my-1 prose-li:my-0">
+                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            <p className="text-[10px] font-bold text-gray-400 mb-1">참고 자료</p>
+                            <div className="flex flex-col gap-1">
+                              {msg.sources.map((src, i) => (
+                                <div key={i} className="flex items-center gap-1 text-[10px] text-indigo-500 font-bold">
+                                  <FileText size={9} />
+                                  <span>{src.filename}{src.page ? ` ${src.page}p` : ''}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     )}

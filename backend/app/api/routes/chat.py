@@ -23,11 +23,10 @@ async def get_sessions(student_id: str):
     res = supabase.table("chat_sessions").select("*").eq("student_id", student_id).order("created_at", desc=True).execute()
     return res.data
 
-@router.post("/ask", response_model=ChatMessageResponse)
+@router.post("/ask")
 async def ask(request: ChatAskRequest):
     try:
-        message = await ask_question(request.session_id, request.content, request.document_ids)
-        return message
+        return await ask_question(request.session_id, request.content, request.document_ids)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

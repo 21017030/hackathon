@@ -60,9 +60,9 @@ export default function App() {
       : t
     ));
     try {
-      const answer = await askAboutDocument(documentId, content, history);
+      const { answer, sources } = await askAboutDocument(documentId, content, history);
       setTabs(prev => prev.map(t => t.documentId === documentId
-        ? { ...t, messages: [...t.messages, { sender: 'ai', content: answer }], isAsking: false }
+        ? { ...t, messages: [...t.messages, { sender: 'ai', content: answer, sources }], isAsking: false }
         : t
       ));
     } catch {

@@ -1,5 +1,5 @@
 import client from './client';
-import type { Document, SimpleMessage } from '@/types';
+import type { Document, SimpleMessage, Source } from '@/types';
 
 export async function getDocuments(studentId: string): Promise<Document[]> {
   const res = await client.get(`/documents/student/${studentId}`);
@@ -39,7 +39,7 @@ export async function askAboutDocument(
   documentId: number,
   content: string,
   history: SimpleMessage[] = [],
-): Promise<string> {
+): Promise<{ answer: string; sources: Source[] }> {
   const res = await client.post(`/documents/${documentId}/ask`, { content, history });
-  return res.data.answer;
+  return { answer: res.data.answer, sources: res.data.sources ?? [] };
 }
