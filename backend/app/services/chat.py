@@ -233,7 +233,7 @@ async def ask_about_document(document_id: int, content: str) -> dict:
     )
     query_vector = embedding_res.embeddings[0].values
 
-    chunks = await get_relevant_chunks(query_vector, [document_id])
+    chunks = await get_relevant_chunks_with_sources(query_vector, [document_id])
     context = _build_context(chunks)
 
     history_str = "\n".join([
