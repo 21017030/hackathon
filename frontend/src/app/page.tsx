@@ -9,7 +9,7 @@ import ChatView from '@/components/ChatView';
 import UploadModal from '@/components/UploadModal';
 import { useAppData } from '@/hooks/useAppData';
 import { useChat } from '@/hooks/useChat';
-import { uploadDocument } from '@/api/documents';
+import { uploadDocument, deleteDocument } from '@/api/documents';
 import { createCategory, deleteCategory } from '@/api/categories';
 import { createSession, deleteSession } from '@/api/chat';
 import type { ViewMode } from '@/types';
@@ -55,14 +55,24 @@ export default function App() {
     }
   };
 
-  const handleDeleteFolder = async (id: number) => {
-    const docCount = documents.filter(d => d.category_id === id).length;
-    if (docCount > 0) {
-      alert(`폴더 안에 파일이 ${docCount}개 있습니다. 파일을 먼저 삭제해주세요.`);
-      return;
-    }
-    if (!confirm('폴더를 삭제하시겠습니까?')) return;
+  const handleDeleteDocument = async (id: number) => {
+    if (!confirm('문서를 삭제하시겠습니까?')) return;
     try {
+      await deleteDocument(id);
+      refresh();
+    } catch {
+      alert('문서 삭제에 실패했습니다.');
+    }
+  };
+
+  const handleDeleteFolder = async (id: number) => {
+    const folderDocs = documents.filter(d => d.category_id === id);
+    const msg = folderDocs.length > 0
+      ? `폴더 안의 파일 ${folderDocs.length}개가 모두 삭제됩니다. 계속하시겠습니까?`
+      : '폴더를 삭제하시겠습니까?';
+    if (!confirm(msg)) return;
+    try {
+      await Promise.all(folderDocs.map(d => deleteDocument(d.id)));
       await deleteCategory(id);
       refresh();
     } catch {
@@ -152,6 +162,7 @@ export default function App() {
               onStartChat={() => setViewMode('chat')}
               onCreateFolder={handleCreateFolder}
               onDeleteFolder={handleDeleteFolder}
+              onDeleteDocument={handleDeleteDocument}
               onUpload={(categoryId) => openUploadModal(categoryId, false)}
             />
           ) : (

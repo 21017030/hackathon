@@ -13,6 +13,7 @@ interface Props {
   onCreateFolder: (name: string) => void;
   onUpload: (categoryId: number | null) => void;
   onDeleteFolder: (id: number) => void;
+  onDeleteDocument: (id: number) => void;
 }
 
 function StatusBadge({ status }: { status: Document['parsing_status'] }) {
@@ -46,6 +47,7 @@ export default function ExplorerView({
   onCreateFolder,
   onUpload,
   onDeleteFolder,
+  onDeleteDocument,
 }: Props) {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -206,12 +208,21 @@ export default function ExplorerView({
                     <StatusBadge status={doc.parsing_status} />
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={onStartChat}
-                      className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                    >
-                      질문하기
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={onStartChat}
+                        className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                      >
+                        질문하기
+                      </button>
+                      <button
+                        onClick={() => onDeleteDocument(doc.id)}
+                        className="p-2 bg-red-50 text-red-400 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                        title="문서 삭제"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
