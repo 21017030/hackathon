@@ -121,57 +121,54 @@ async def get_relevant_chunks(query_vector: List[float], document_ids: Optional[
         return []
 
 
-async def ask_question(session_id: int, content: str, document_ids: Optional[List[int]] = None):
-    try:
-        # 1. 과거 대화 내역 먼저 가져오기 (현재 질문 저장 전에 조회해야 정확함)
-        history_res = supabase.table("chat_messages") \
-            .select("*") \
-            .eq("session_id", session_id) \
-            .order("created_at", desc=True) \
-            .limit(6) \
-            .execute()
-        history = history_res.data[::-1]
+# ── ask_question 보조 함수 ─────────────────────────────────────
 
-        # 2. 사용자 질문 저장
-        logger.info(f"Saving user message to session {session_id}")
-        supabase.table("chat_messages").insert({
-            "session_id": session_id,
-            "sender_type": "USER",
-            "content": content
-        }).execute()
+def _load_history(session_id: int, limit: int = 6) -> list:
+    res = supabase.table("chat_messages") \
+        .select("*") \
+        .eq("session_id", session_id) \
+        .order("created_at", desc=True) \
+        .limit(limit) \
+        .execute()
+    return res.data[::-1]
 
-        # 3. 쿼리 재작성 + 임베딩
-        search_query = _rewrite_query(content, history)
-        logger.info(f"Generating embedding using {EMBEDDING_MODEL}")
-        embedding_res = client.models.embed_content(
-            model=EMBEDDING_MODEL,
-            contents=search_query,
-            config=types.EmbedContentConfig(
-                task_type="retrieval_query",
-                output_dimensionality=EMBEDDING_DIMENSIONS,
-            ),
-        )
-        query_vector = embedding_res.embeddings[0].values
 
-        # 4. 관련 청크 검색 (document_ids 없으면 해당 유저의 문서만 사용)
-        if document_ids is None:
-            session_res = supabase.table("chat_sessions").select("user_id").eq("id", session_id).execute()
-            user_id = session_res.data[0]["user_id"]
-            docs_res = supabase.table("documents").select("id").eq("user_id", user_id).execute()
-            document_ids = [d["id"] for d in docs_res.data]
+def _save_message(session_id: int, sender_type: str, content: str, sources: list = None) -> dict:
+    payload = {"session_id": session_id, "sender_type": sender_type, "content": content}
+    if sources is not None:
+        payload["sources"] = sources
+    res = supabase.table("chat_messages").insert(payload).execute()
+    if not res.data:
+        raise HTTPException(status_code=500, detail="메시지 저장에 실패했습니다.")
+    return res.data[0]
 
-        if document_ids:
-            chunks = await get_relevant_chunks_with_sources(query_vector, document_ids)
-        else:
-            chunks = []  # 유저의 문서가 없으면 빈 결과
-        context = _build_context(chunks)
-        sources = _extract_sources(chunks)
-        logger.info(f"Found {len(chunks)} relevant chunks.")
 
-        # 5. 프롬프트 생성 및 답변
-        history_str = "\n".join([f"{m['sender_type']}: {m['content']}" for m in history])
-        filenames = "|".join(s['filename'] for s in sources)
-        prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
+def _resolve_document_ids(session_id: int, document_ids: Optional[List[int]]) -> List[int]:
+    """document_ids가 None이면 세션 소유자의 전체 문서 ID를 반환."""
+    if document_ids is not None:
+        return document_ids
+    session_res = supabase.table("chat_sessions").select("user_id").eq("id", session_id).execute()
+    if not session_res.data:
+        raise HTTPException(status_code=404, detail="채팅 세션을 찾을 수 없습니다.")
+    user_id = session_res.data[0]["user_id"]
+    docs_res = supabase.table("documents").select("id").eq("user_id", user_id).execute()
+    return [d["id"] for d in docs_res.data]
+
+
+async def _generate_embedding(text: str) -> List[float]:
+    res = client.models.embed_content(
+        model=EMBEDDING_MODEL,
+        contents=text,
+        config=types.EmbedContentConfig(
+            task_type="retrieval_query",
+            output_dimensionality=EMBEDDING_DIMENSIONS,
+        ),
+    )
+    return res.embeddings[0].values
+
+
+def _build_prompt(context: str, history_str: str, content: str, filenames: str) -> str:
+    return f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
 제공된 [강의자료 내용]을 바탕으로 사용자의 질문에 답변하세요.
 자료에서 답을 찾을 수 없다면 솔직하게 말하세요.
 페이지를 묻는 질문이라면 강의자료 내용의 페이지 표시를 참고하여 알려주세요.
@@ -190,67 +187,81 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
 
 답변:"""
 
-        logger.info(f"Prompting Gemini model: {CHAT_MODEL}")
+
+async def ask_question(session_id: int, content: str, document_ids: Optional[List[int]] = None):
+    try:
+        # 1. 과거 대화 내역 (현재 질문 저장 전에 조회)
+        history = _load_history(session_id)
+
+        # 2. 사용자 질문 저장
+        logger.info(f"Saving user message to session {session_id}")
+        _save_message(session_id, "USER", content)
+
+        # 3. 쿼리 재작성 + 임베딩
+        search_query = _rewrite_query(content, history)
+        logger.info(f"Generating embedding for session {session_id}")
+        query_vector = await _generate_embedding(search_query)
+
+        # 4. 관련 청크 검색
+        resolved_ids = _resolve_document_ids(session_id, document_ids)
+        chunks = await get_relevant_chunks_with_sources(query_vector, resolved_ids) if resolved_ids else []
+        context = _build_context(chunks)
+        sources = _extract_sources(chunks)
+        logger.info(f"Found {len(chunks)} relevant chunks for session {session_id}")
+
+        # 5. 프롬프트 생성 및 답변
+        history_str = "\n".join([f"{m['sender_type']}: {m['content']}" for m in history])
+        filenames = "|".join(s['filename'] for s in sources)
+        prompt = _build_prompt(context, history_str, content, filenames)
+
+        logger.info(f"Prompting {CHAT_MODEL} for session {session_id}")
         response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
         ai_answer, sources = _filter_used_sources(response.text, sources)
 
         # 6. AI 답변 저장
-        logger.info("Saving AI response to DB")
-        res = supabase.table("chat_messages").insert({
-            "session_id": session_id,
-            "sender_type": "AI",
-            "content": ai_answer,
-            "sources": sources,
-        }).execute()
+        logger.info(f"Saving AI response to session {session_id}")
+        msg = _save_message(session_id, "AI", ai_answer, sources)
+        return {"message": msg, "sources": sources}
 
-        if not res.data:
-            raise Exception("Failed to insert AI message into database")
-
-        return {"message": res.data[0], "sources": sources}
-
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception(f"Error in ask_question: {str(e)}")
-        raise e
+        logger.exception(f"Error in ask_question (session={session_id}): {e}")
+        raise HTTPException(status_code=500, detail="AI 응답 생성 중 오류가 발생했습니다.")
 
 
 async def ask_about_document(document_id: int, content: str) -> dict:
-    # 1. 사용자 메시지 저장
-    supabase.table("document_chat_messages").insert({
-        "document_id": document_id,
-        "sender_type": "USER",
-        "content": content,
-    }).execute()
+    try:
+        # 1. 사용자 메시지 저장
+        supabase.table("document_chat_messages").insert({
+            "document_id": document_id,
+            "sender_type": "USER",
+            "content": content,
+        }).execute()
 
-    # 2. 대화 내역 DB에서 로드
-    history_res = supabase.table("document_chat_messages") \
-        .select("sender_type, content") \
-        .eq("document_id", document_id) \
-        .order("created_at", desc=True) \
-        .limit(6) \
-        .execute()
-    history = history_res.data[::-1]
+        # 2. 대화 내역 로드
+        history_res = supabase.table("document_chat_messages") \
+            .select("sender_type, content") \
+            .eq("document_id", document_id) \
+            .order("created_at", desc=True) \
+            .limit(6) \
+            .execute()
+        history = history_res.data[::-1]
 
-    # 3. 쿼리 재작성 + 임베딩
-    search_query = _rewrite_query(content, history)
-    embedding_res = client.models.embed_content(
-        model=EMBEDDING_MODEL,
-        contents=search_query,
-        config=types.EmbedContentConfig(
-            task_type="retrieval_query",
-            output_dimensionality=EMBEDDING_DIMENSIONS,
-        ),
-    )
-    query_vector = embedding_res.embeddings[0].values
+        # 3. 쿼리 재작성 + 임베딩
+        search_query = _rewrite_query(content, history)
+        query_vector = await _generate_embedding(search_query)
 
-    chunks = await get_relevant_chunks_with_sources(query_vector, [document_id])
-    context = _build_context(chunks)
+        # 4. 관련 청크 검색
+        chunks = await get_relevant_chunks_with_sources(query_vector, [document_id])
+        context = _build_context(chunks)
 
-    history_str = "\n".join([
-        f"{'사용자' if m['sender_type'] == 'USER' else 'AI'}: {m['content'][:300]}"
-        for m in history
-    ])
+        history_str = "\n".join([
+            f"{'사용자' if m['sender_type'] == 'USER' else 'AI'}: {m['content'][:300]}"
+            for m in history
+        ])
 
-    prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
+        prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
 아래 [문서 내용]을 바탕으로 질문에 간결하게 답변하세요.
 자료에 없는 내용은 솔직하게 모른다고 말하세요.
 
@@ -264,17 +275,23 @@ async def ask_about_document(document_id: int, content: str) -> dict:
 
 답변:"""
 
-    response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
-    answer = response.text or ""
+        response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
+        answer = response.text or ""
 
-    # 4. AI 답변 저장
-    supabase.table("document_chat_messages").insert({
-        "document_id": document_id,
-        "sender_type": "AI",
-        "content": answer,
-    }).execute()
+        # 5. AI 답변 저장
+        supabase.table("document_chat_messages").insert({
+            "document_id": document_id,
+            "sender_type": "AI",
+            "content": answer,
+        }).execute()
 
-    return {"answer": answer, "sources": []}
+        return {"answer": answer, "sources": []}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error in ask_about_document (document_id={document_id}): {e}")
+        raise HTTPException(status_code=500, detail="문서 질문 처리 중 오류가 발생했습니다.")
 
 
 def delete_session(session_id: int) -> None:

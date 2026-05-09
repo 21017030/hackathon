@@ -13,10 +13,11 @@ import AuthScreen from '@/components/AuthScreen';
 import { useAppData } from '@/hooks/useAppData';
 import { useAuth } from '@/hooks/useAuth';
 import { useChat } from '@/hooks/useChat';
-import { uploadDocument, deleteDocument, askAboutDocument, getDocuments, getDocumentChat, clearDocumentChat } from '@/api/documents';
+import { useDocumentTabs } from '@/hooks/useDocumentTabs';
+import { uploadDocument, deleteDocument, getDocuments } from '@/api/documents';
 import { createCategory, deleteCategory } from '@/api/categories';
 import { createSession, deleteSession } from '@/api/chat';
-import type { ViewMode, OpenTab } from '@/types';
+import type { ViewMode } from '@/types';
 
 export default function App() {
   const router = useRouter();
@@ -30,73 +31,14 @@ export default function App() {
   const [uploadShowFolderSelect, setUploadShowFolderSelect] = useState(true);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
-  // 문서 탭
-  const [tabs, setTabs] = useState<OpenTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<number | null>(null);
-
   const userId = user?.id ?? '';
   const { categories, documents, sessions, setSessions, refresh } = useAppData(userId);
   const { messages, currentSessionId, setCurrentSessionId, sendMessage, isAsking, loadMessages } = useChat();
+  const { tabs, activeTabId, activeTab, setActiveTabId, openTab, closeTab, clearTab, askInTab } = useDocumentTabs();
 
   const requireAuth = (action: () => void) => {
     if (!user) { setLoginModalOpen(true); return; }
     action();
-  };
-
-  // ── 문서 탭 관리 ──────────────────────────────────────────
-  const openDocumentTab = async (documentId: number, filename: string) => {
-    setActiveTabId(documentId);
-    setTabs(prev => {
-      if (prev.find(t => t.documentId === documentId)) return prev;
-      return [...prev, { documentId, filename, messages: [], isAsking: false }];
-    });
-    try {
-      const messages = await getDocumentChat(documentId);
-      setTabs(prev => prev.map(t => t.documentId === documentId ? { ...t, messages } : t));
-    } catch {
-      // 로드 실패 시 빈 상태 유지
-    }
-  };
-
-  const handleDocumentChatClear = async (documentId: number) => {
-    if (!confirm('채팅 내역을 초기화하시겠습니까?')) return;
-    try {
-      await clearDocumentChat(documentId);
-      setTabs(prev => prev.map(t => t.documentId === documentId ? { ...t, messages: [] } : t));
-    } catch {
-      alert('초기화에 실패했습니다.');
-    }
-  };
-
-  const closeTab = (documentId: number) => {
-    setTabs(prev => {
-      const remaining = prev.filter(t => t.documentId !== documentId);
-      if (activeTabId === documentId) {
-        const idx = prev.findIndex(t => t.documentId === documentId);
-        const next = remaining[Math.max(0, idx - 1)];
-        setActiveTabId(next?.documentId ?? null);
-      }
-      return remaining;
-    });
-  };
-
-  const handleDocumentAsk = async (documentId: number, content: string) => {
-    setTabs(prev => prev.map(t => t.documentId === documentId
-      ? { ...t, messages: [...t.messages, { sender: 'user', content }], isAsking: true }
-      : t
-    ));
-    try {
-      const { answer } = await askAboutDocument(documentId, content);
-      setTabs(prev => prev.map(t => t.documentId === documentId
-        ? { ...t, messages: [...t.messages, { sender: 'ai', content: answer }], isAsking: false }
-        : t
-      ));
-    } catch {
-      setTabs(prev => prev.map(t => t.documentId === documentId
-        ? { ...t, isAsking: false }
-        : t
-      ));
-    }
   };
 
   // ── 업로드 ────────────────────────────────────────────────
@@ -230,7 +172,6 @@ export default function App() {
   // ── 파생 값 ───────────────────────────────────────────────
   const currentCategoryName = categories.find(c => c.id === selectedCategoryId)?.name ?? '모든 자료';
   const currentSessionTitle = sessions.find(s => s.id === currentSessionId)?.title ?? 'AI 학습 챗';
-  const activeTab = tabs.find(t => t.documentId === activeTabId) ?? null;
 
   const breadcrumb = activeTab
     ? activeTab.filename
@@ -352,8 +293,8 @@ export default function App() {
               documentId={activeTabId}
               messages={activeTab.messages}
               isAsking={activeTab.isAsking}
-              onSend={(content) => handleDocumentAsk(activeTabId, content)}
-              onClear={() => handleDocumentChatClear(activeTabId)}
+              onSend={(content) => askInTab(activeTabId, content)}
+              onClear={() => clearTab(activeTabId)}
             />
           </div>
         ) : (
@@ -368,7 +309,7 @@ export default function App() {
                 onCreateFolder={handleCreateFolder}
                 onDeleteFolder={handleDeleteFolder}
                 onDeleteDocument={handleDeleteDocument}
-                onViewDocument={openDocumentTab}
+                onViewDocument={openTab}
                 onUpload={(categoryId) => openUploadModal(categoryId, false)}
               />
             ) : (
