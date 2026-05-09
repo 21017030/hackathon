@@ -4,10 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { checkLoginId, updateUser } from '@/api/auth';
+import { STORAGE_KEY, NAME_REGEX } from '@/constants';
+import { getApiErrorDetail } from '@/utils/apiError';
 import type { User } from '@/types';
-
-const NAME_REGEX = /^[가-힣a-zA-Z\s]+$/;
-const STORAGE_KEY = 'vibe_user';
 
 export default function EditProfilePage() {
   const router = useRouter();
@@ -107,8 +106,8 @@ export default function EditProfilePage() {
       const updated = await updateUser(user.id, payload);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       router.push('/mypage');
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail ?? '';
+    } catch (err: unknown) {
+      const detail = getApiErrorDetail(err);
       if (detail.includes('학번')) setErrors(e => ({ ...e, studentId: '이미 등록된 학번입니다.' }));
       else if (detail.includes('아이디')) { setErrors(e => ({ ...e, loginId: '이미 사용 중인 아이디입니다.' })); setLoginIdStatus('taken'); }
       else setErrors(e => ({ ...e, form: '수정에 실패했습니다.' }));

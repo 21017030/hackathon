@@ -10,6 +10,7 @@ export function useChat() {
   const [isAsking, setIsAsking] = useState(false);
 
   const loadMessages = async (sessionId: number) => {
+    setMessages([]);
     const data = await getMessages(sessionId);
     setMessages(data);
   };

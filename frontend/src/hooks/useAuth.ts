@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { STORAGE_KEY } from '@/constants';
 import type { User } from '@/types';
-
-const STORAGE_KEY = 'vibe_user';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);

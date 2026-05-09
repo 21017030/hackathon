@@ -3,9 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { checkLoginId, register } from '@/api/auth';
-
-const NAME_REGEX = /^[가-힣a-zA-Z\s]+$/;
-const STORAGE_KEY = 'vibe_user';
+import { STORAGE_KEY, NAME_REGEX } from '@/constants';
+import { getApiErrorDetail } from '@/utils/apiError';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -87,8 +86,8 @@ export default function RegisterPage() {
       );
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
       router.push('/');
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail ?? '';
+    } catch (err: unknown) {
+      const detail = getApiErrorDetail(err);
       if (detail.includes('학번')) {
         setErrors(e => ({ ...e, studentId: '이미 등록된 학번입니다.' }));
       } else if (detail.includes('아이디')) {

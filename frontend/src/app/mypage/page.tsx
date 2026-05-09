@@ -4,9 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { updateUser } from '@/api/auth';
+import { STORAGE_KEY } from '@/constants';
 import type { User } from '@/types';
-
-const STORAGE_KEY = 'vibe_user';
 
 export default function MyPage() {
   const router = useRouter();

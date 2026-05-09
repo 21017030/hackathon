@@ -5,7 +5,7 @@ from google.genai import types
 
 from fastapi import HTTPException
 from app.core.supabase import supabase
-from app.services.document import CHAT_MODEL, REWRITE_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, client
+from app.core.gemini import client, CHAT_MODEL, REWRITE_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
 
 logger = logging.getLogger(__name__)
 
