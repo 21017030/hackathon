@@ -2,13 +2,11 @@ import logging
 import traceback
 import uuid
 import os
-import io
+import tempfile
 import fitz  # PyMuPDF
 from typing import List
 from google import genai
 from google.genai import types
-from pptx import Presentation
-from docx import Document as DocxDocument
 
 from fastapi import HTTPException
 
@@ -26,27 +24,20 @@ EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIMENSIONS = 1536  # pgvector HNSW 인덱스 호환 (최대 2000차원)
 
 MAGIC_NUMBERS = {
-    ".pdf":  b"%PDF",
-    ".pptx": b"PK\x03\x04",
-    ".docx": b"PK\x03\x04",
-    ".ppt":  b"\xd0\xcf\x11\xe0",
+    ".pdf": b"%PDF",
 }
 
 CONTENT_TYPES = {
-    ".pdf":  "application/pdf",
-    ".ppt":  "application/vnd.ms-powerpoint",
-    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".txt":  "text/plain; charset=utf-8",
+    ".pdf": "application/pdf",
 }
 
-ALLOWED_EXTENSIONS = {".pdf", ".ppt", ".pptx", ".docx", ".txt"}
+ALLOWED_EXTENSIONS = {".pdf"}
 
 
 def validate_file(original_name: str, contents: bytes) -> str:
     ext = os.path.splitext(original_name)[1].lower()
     if not original_name or ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="허용되지 않는 파일 형식입니다.")
+        raise HTTPException(status_code=400, detail="PDF 파일만 업로드할 수 있습니다.")
 
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="파일 크기는 50MB를 초과할 수 없습니다.")
@@ -55,13 +46,44 @@ def validate_file(original_name: str, contents: bytes) -> str:
     if magic and not contents.startswith(magic):
         raise HTTPException(status_code=400, detail="파일 형식이 올바르지 않습니다.")
 
-    if ext == ".txt":
-        try:
-            contents.decode("utf-8")
-        except UnicodeDecodeError:
-            raise HTTPException(status_code=400, detail="파일 형식이 올바르지 않습니다.")
-
     return ext
+
+
+def _extract_pdf_gemini(file_bytes: bytes, filename: str) -> str:
+    """Gemini Files API로 PDF 전체 내용 추출 (이미지/표/차트 포함)."""
+    tmp_path = None
+    uploaded_file = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.write(file_bytes)
+            tmp_path = f.name
+
+        uploaded_file = client.files.upload(
+            path=tmp_path,
+            config=types.UploadFileConfig(
+                mime_type="application/pdf",
+                display_name=filename,
+            ),
+        )
+
+        response = client.models.generate_content(
+            model=CHAT_MODEL,
+            contents=[
+                uploaded_file,
+                "이 PDF 문서의 전체 내용을 텍스트로 추출해주세요. "
+                "표, 이미지, 그래프, 차트가 있으면 그 내용도 설명해주세요. "
+                "마크다운 형식 없이 순수 텍스트로만 출력하세요.",
+            ],
+        )
+        return response.text or ""
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        if uploaded_file:
+            try:
+                client.files.delete(name=uploaded_file.name)
+            except Exception:
+                pass
 
 
 def upload_document(original_name: str, contents: bytes, ext: str, student_id: str = None, category_id: int = None) -> int:
@@ -120,28 +142,16 @@ async def process_document_rag(document_id: int):
         # 2. 파일 다운로드
         file_bytes = supabase.storage.from_("documents").download(file_path)
 
-        # 3. 텍스트 추출
+        # 3. 텍스트 추출 (Gemini 멀티모달 우선, PyMuPDF 폴백)
         text = ""
-        if ext == ".pdf":
-            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
-                for page in doc:
+        try:
+            text = _extract_pdf_gemini(file_bytes, doc_data["original_file_name"])
+            logger.info(f"문서 {document_id} Gemini 멀티모달 추출 완료 ({len(text)}자)")
+        except Exception as e:
+            logger.warning(f"Gemini 추출 실패, PyMuPDF 폴백: {e}")
+            with fitz.open(stream=file_bytes, filetype="pdf") as pdf:
+                for page in pdf:
                     text += page.get_text()
-        elif ext == ".txt":
-            text = file_bytes.decode("utf-8")
-        elif ext in (".pptx",):
-            prs = Presentation(io.BytesIO(file_bytes))
-            for slide in prs.slides:
-                for shape in slide.shapes:
-                    if shape.has_text_frame:
-                        for para in shape.text_frame.paragraphs:
-                            text += para.text + "\n"
-        elif ext in (".docx",):
-            docx = DocxDocument(io.BytesIO(file_bytes))
-            for para in docx.paragraphs:
-                text += para.text + "\n"
-        else:
-            logger.warning(f"{ext} 형식은 텍스트 추출을 지원하지 않습니다.")
-            text = f"[{doc_data['original_file_name']} - 텍스트 추출 미지원 형식]"
 
         if not text.strip():
             raise Exception("추출된 텍스트가 없습니다.")

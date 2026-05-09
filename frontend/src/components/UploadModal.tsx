@@ -22,7 +22,11 @@ export default function UploadModal({ categories, initialCategoryId, showFolderS
     if (files[0]) setSelectedFile(files[0]);
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, multiple: false });
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    multiple: false,
+    accept: { 'application/pdf': ['.pdf'] },
+  });
 
   if (isUploading) {
     return (
@@ -93,7 +97,7 @@ export default function UploadModal({ categories, initialCategoryId, showFolderS
             <div className="text-gray-400">
               <Upload size={32} className="mx-auto mb-2" />
               <p className="text-sm font-bold">{isDragActive ? '여기에 놓으세요' : '파일을 드래그하거나 클릭하여 선택'}</p>
-              <p className="text-xs mt-1">PDF, DOCX, TXT 등 지원</p>
+              <p className="text-xs mt-1">PDF 파일만 지원</p>
             </div>
           )}
         </div>
