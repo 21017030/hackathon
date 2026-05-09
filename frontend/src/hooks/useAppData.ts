@@ -12,14 +12,14 @@ export function useAppData(studentId: string) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
 
   const refresh = useCallback(async () => {
-    const [cats, docs, sess] = await Promise.all([
+    const [cats, docs, sess] = await Promise.allSettled([
       getCategories(studentId),
       getDocuments(studentId),
       getSessions(studentId),
     ]);
-    setCategories(cats);
-    setDocuments(docs);
-    setSessions(sess);
+    if (cats.status === 'fulfilled') setCategories(cats.value);
+    if (docs.status === 'fulfilled') setDocuments(docs.value);
+    if (sess.status === 'fulfilled') setSessions(sess.value);
   }, [studentId]);
 
   useEffect(() => {
