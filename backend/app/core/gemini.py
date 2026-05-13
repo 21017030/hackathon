@@ -1,7 +1,26 @@
 # Gemini AI 클라이언트 및 모델/파라미터 설정
 # 모델명과 RAG 동작 상수를 한 곳에서 관리합니다.
+import time
+import logging
 from google import genai
 from app.core.config import GEMINI_API_KEY
+
+logger = logging.getLogger(__name__)
+
+
+def gemini_call(fn, *args, max_retries: int = 3, initial_delay: float = 5.0, **kwargs):
+    """503 UNAVAILABLE 에러일 때만 지수 백오프로 재시도."""
+    for attempt in range(max_retries):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            err_str = str(e)
+            if ("UNAVAILABLE" in err_str or "503" in err_str) and attempt < max_retries - 1:
+                delay = initial_delay * (2 ** attempt)
+                logger.warning(f"Gemini 503 에러, {delay:.0f}초 후 재시도 ({attempt + 1}/{max_retries - 1})")
+                time.sleep(delay)
+            else:
+                raise
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 

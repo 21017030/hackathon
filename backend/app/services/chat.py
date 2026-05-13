@@ -5,7 +5,7 @@ from google.genai import types
 
 from fastapi import HTTPException
 from app.core.supabase import supabase
-from app.core.gemini import client, CHAT_MODEL, REWRITE_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, RAG_CHUNK_LIMIT, HISTORY_LIMIT, REWRITE_HISTORY_WINDOW
+from app.core.gemini import client, CHAT_MODEL, REWRITE_MODEL, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, RAG_CHUNK_LIMIT, HISTORY_LIMIT, REWRITE_HISTORY_WINDOW, gemini_call
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def _rewrite_query(content: str, history: list) -> str:
 
 검색 쿼리:"""
     try:
-        response = client.models.generate_content(model=REWRITE_MODEL, contents=prompt)
+        response = gemini_call(client.models.generate_content, model=REWRITE_MODEL, contents=prompt)
         rewritten = (response.text or "").strip()
         logger.info(f"쿼리 재작성: '{content}' → '{rewritten}'")
         return rewritten or content
@@ -156,7 +156,8 @@ def _resolve_document_ids(session_id: int, document_ids: Optional[List[int]]) ->
 
 
 async def _generate_embedding(text: str) -> List[float]:
-    res = client.models.embed_content(
+    res = gemini_call(
+        client.models.embed_content,
         model=EMBEDDING_MODEL,
         contents=text,
         config=types.EmbedContentConfig(
@@ -215,7 +216,7 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         prompt = _build_prompt(context, history_str, content, filenames)
 
         logger.info(f"Prompting {CHAT_MODEL} for session {session_id}")
-        response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
+        response = gemini_call(client.models.generate_content, model=CHAT_MODEL, contents=prompt)
         ai_answer, sources = _filter_used_sources(response.text, sources)
 
         # 6. AI 답변 저장
@@ -275,7 +276,7 @@ async def ask_about_document(document_id: int, content: str) -> dict:
 
 답변:"""
 
-        response = client.models.generate_content(model=CHAT_MODEL, contents=prompt)
+        response = gemini_call(client.models.generate_content, model=CHAT_MODEL, contents=prompt)
         answer = response.text or ""
 
         # 5. AI 답변 저장
