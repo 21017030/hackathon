@@ -1,5 +1,5 @@
 ================================================================
-  VibeLRS 수정 이력
+  Study Killer (구 VibeLRS) 수정 이력
 ================================================================
 
 ----------------------------------------------------------------
@@ -585,3 +585,263 @@
   - layout.tsx에 <BfcacheGuard /> 전역 마운트 (모든 페이지에 자동 적용)
 
 수정 파일: components/BfcacheGuard.tsx(신규), app/layout.tsx
+
+
+----------------------------------------------------------------
+[수정 26] 프로젝트명 VibeLRS → Study Killer 변경
+----------------------------------------------------------------
+
+수정 내용:
+  - 프론트엔드 전체에서 "VibeLRS" 텍스트 → "Study Killer"로 교체
+  - Sidebar.tsx: 로고 텍스트 변경
+  - layout.tsx: 페이지 타이틀 변경
+  - 수정사항.txt 헤더도 변경 (기록용)
+
+수정 파일: Sidebar.tsx, layout.tsx
+
+
+----------------------------------------------------------------
+[수정 27] 사이드바 로고 이미지 교체 및 파비콘 설정
+----------------------------------------------------------------
+
+수정 내용:
+  - 펼쳐진 책 + 번개 이미지(logo.png)를 직접 생성하여 public/logo.png로 저장
+  - Sidebar.tsx: 텍스트 로고 → <img src="/logo.png"> 이미지 로고
+  - favicon.ico: 기존 Next.js 기본 파비콘을 logo.png를 32x32 ICO로 변환하여 교체
+    (app/icon.png보다 app/favicon.ico가 우선 적용됨)
+  - 회원가입 페이지 탭 타이틀: app/register/layout.tsx 신규 생성
+    export const metadata = { title: "Study Killer : 회원가입" }
+
+수정 파일: public/logo.png(신규), Sidebar.tsx, app/favicon.ico,
+           app/register/layout.tsx(신규)
+
+
+----------------------------------------------------------------
+[수정 28] AI 답변 허용 체크박스 기능 추가 (메인 채팅)
+----------------------------------------------------------------
+
+배경:
+  강의자료에 없는 내용을 물어봐도 AI가 모른다고만 답하는 문제.
+  체크박스로 AI 자체 지식 활용 여부를 선택할 수 있게 함.
+
+수정 내용:
+  백엔드:
+  - models/chat.py: ChatAskRequest에 allow_ai_answer: bool = False 추가
+  - routes/chat.py: allow_ai_answer를 ask_question()으로 전달
+  - services/chat.py:
+    * _build_prompt(): allow_ai_answer에 따라 두 가지 프롬프트 분기
+      - False: 강의자료 1순위 → 이전 대화 2순위 → 없으면 모른다고 답변
+      - True:  강의자료 1순위 → AI 지식 2순위 (의무 시작 문구 포함)
+    * _filter_ai_history(): AI 지식으로 답변된 메시지를 히스토리에서 제외
+      (allow_ai_answer=False일 때 이전 AI 지식 답변을 컨텍스트에서 제거)
+    * ask_question(): allow_ai_answer 파라미터 추가, 히스토리 필터 적용
+
+  프론트엔드:
+  - ChatView.tsx: 입력창 아래 "AI 답변 허용" 체크박스 추가
+    (보라색 accent, font-semibold, pb-44으로 대화창 가림 방지)
+  - hooks/useChat.ts: sendMessage(content, documentIds?, allowAiAnswer?) 파라미터 추가
+  - api/chat.ts: askQuestion()에 allow_ai_answer 필드 추가
+  - app/page.tsx: handleSend(content, allowAiAnswer) 시그니처 수정
+
+수정 파일: models/chat.py, routes/chat.py, services/chat.py,
+           ChatView.tsx, hooks/useChat.ts, api/chat.ts, app/page.tsx
+
+
+----------------------------------------------------------------
+[수정 29] AI 답변 출처 표시 개선
+----------------------------------------------------------------
+
+수정 내용:
+  (1) AI 지식 사용 시 "AI 답변" 출처 배지 표시
+    - _filter_used_sources(): [참고자료: ... |AI 답변] 마커 파싱 시
+      {"filename": "AI 답변", "category": "AI 답변"} 항목 추가
+    - ChatView.tsx: 출처 배지를 파일명별로 분기
+      * 일반 파일 → 인디고 FileText 배지
+      * "AI 답변"   → 보라색 Sparkles 배지
+
+  (2) [이전 대화 내역] 프롬프트 누출 방지
+    - AI가 답변에 "[이전 대화 내역]" 텍스트를 그대로 출력하는 버그
+    - _filter_used_sources() 시작부에 regex로 해당 텍스트 이후 내용 제거:
+      re.sub(r'\[이전 대화 내역\].*', '', ai_answer, flags=re.DOTALL)
+
+  (3) 강의자료 미사용 시 출처 표시 제거
+    - AI가 답을 못 찾아도 검색된 파일을 출처로 표시하는 문제
+    - 프롬프트: "실제로 활용하지 않은 파일은 절대 포함하지 마세요" 강화
+    - 강의자료에서 답을 못 찾으면 [참고자료:] 마커 자체를 출력하지 말도록 명시
+
+수정 파일: services/chat.py, ChatView.tsx
+
+
+----------------------------------------------------------------
+[수정 30] 대화 삭제 확인 다이얼로그 추가
+----------------------------------------------------------------
+
+수정 내용:
+  - 메인 채팅 세션 삭제: 삭제 버튼 클릭 시 confirm() 다이얼로그 표시
+    "대화 내역이 모두 삭제됩니다. 계속하시겠습니까?"
+  - 미니 챗 초기화: clearTab()에 동일한 confirm() 다이얼로그 추가
+
+수정 파일: app/page.tsx, hooks/useDocumentTabs.ts
+
+
+----------------------------------------------------------------
+[수정 31] 회원 탈퇴 기능 추가
+----------------------------------------------------------------
+
+수정 내용:
+  백엔드:
+  - services/auth.py: delete_user() 추가
+    삭제 순서: document_chat_messages → document_chunks → documents
+              → chat_messages → chat_sessions → categories → users
+    Storage 파일 삭제: documents 테이블에서 file_path를 읽어
+    supabase.storage.from_("documents").remove(file_paths) 호출
+    (스토리지 삭제 실패해도 DB 삭제는 정상 처리)
+  - routes/auth.py: DELETE /auth/users/{user_id} 엔드포인트 추가
+
+  프론트엔드:
+  - api/auth.ts: deleteUser() 함수 추가
+  - app/mypage/page.tsx:
+    * handleWithdraw(): confirm() 후 deleteUser() 호출, localStorage 초기화, '/'로 이동
+    * 하단 빨간색 "회원 탈퇴" 버튼 추가
+
+수정 파일: services/auth.py, routes/auth.py, api/auth.ts, app/mypage/page.tsx
+
+
+----------------------------------------------------------------
+[수정 32] 미니 챗 AI 답변 허용 기능 추가
+----------------------------------------------------------------
+
+수정 내용:
+  백엔드:
+  - routes/documents.py: /documents/{id}/ask에서 allow_ai_answer 파라미터 수신
+  - services/chat.py: ask_about_document()에 allow_ai_answer 파라미터 추가
+    * False: 문서 내용만으로 답변, 없으면 솔직하게 모른다고 답
+    * True: 문서 1순위 → AI 지식 2순위 (의무 시작 문구로 판별)
+    * AI 지식 사용 감지: "AI 지식으로 답변드립니다" / "AI 지식으로 보완하여" 포함 여부
+    * sources에 {"filename": "AI 답변", "category": "AI 답변"} 추가하여 반환
+
+  document_chat_messages 테이블에 sources JSONB 컬럼 추가 (Supabase SQL):
+    ALTER TABLE document_chat_messages ADD COLUMN sources JSONB DEFAULT '[]'::jsonb;
+
+  히스토리 필터링: allow_ai_answer=False 시 _filter_ai_history() 적용
+    (sources에 "AI 답변"이 있는 AI 메시지를 히스토리에서 제외)
+
+  프론트엔드:
+  - DocumentViewerPane.tsx:
+    * allowAiAnswer 상태 추가
+    * 입력창 아래 "AI 답변 허용" 체크박스 추가 (보라색 accent)
+    * onSend 시그니처: (content: string, allowAiAnswer: boolean) → void
+    * AI 답변 출처 배지: 보라색 Sparkles 아이콘
+  - hooks/useDocumentTabs.ts: askInTab(documentId, content, allowAiAnswer?) 파라미터 추가
+  - api/documents.ts: askAboutDocument()에 allowAiAnswer 파라미터 추가,
+    Source 타입 호환을 위해 page: null 자동 삽입
+  - app/page.tsx: onSend 연결 시 allowAiAnswer 전달
+
+수정 파일: routes/documents.py, services/chat.py,
+           DocumentViewerPane.tsx, hooks/useDocumentTabs.ts,
+           api/documents.ts, app/page.tsx
+
+
+----------------------------------------------------------------
+[수정 33] 미니 챗 코드 검색 품질 개선
+----------------------------------------------------------------
+
+수정 내용:
+  - get_relevant_chunks()에 match_threshold 파라미터 추가 (기본값 0.5)
+  - ask_about_document()에서 단일 문서 검색 시:
+    * match_threshold: 0.5 → 0.3 (코드 등 자연어-코드 간 유사도 낮은 청크도 포함)
+    * limit: 6 → 10 (더 많은 청크 반환)
+
+이유:
+  메인 채팅은 여러 문서를 검색하므로 상대적으로 상위 랭크에 코드 청크가 올라오지만,
+  미니 챗은 단일 문서만 검색해 임계값 0.5에서 코드 청크가 잘려나가는 경우 발생.
+
+수정 파일: services/chat.py
+
+
+----------------------------------------------------------------
+[수정 34] 코드 원문 보존 프롬프트 추가
+----------------------------------------------------------------
+
+문제:
+  AI가 강의자료의 코드를 원문 그대로 출력하지 않고 재작성/변형하는 경우 발생.
+
+수정 내용:
+  - CODE_RULE 상수 추가:
+    "강의자료에 코드가 있으면 한 글자도 수정하지 말고 원문 그대로 코드 블록(```)으로 출력하세요."
+  - 메인 채팅 프롬프트(allow_ai_answer True/False 모두) 및
+    미니 챗 프롬프트 양쪽에 CODE_RULE 삽입
+
+수정 파일: services/chat.py
+
+
+----------------------------------------------------------------
+[수정 35] PDF 파싱 섹션 기반 청킹 도입
+----------------------------------------------------------------
+
+배경:
+  고정 크기(1000자) 청킹 시 코드 청크에 섹션 제목 정보가 없어
+  "이진 트리 코드 보여줘" 검색 시 유사도가 낮게 나오는 문제.
+
+수정 내용:
+  (1) PDF 추출 프롬프트 수정:
+    슬라이드/페이지의 큰 제목·소제목을 "## 제목명" 형식으로 표시하도록 지시
+    ("제목 표시(## ) 외에는 마크다운 형식 없이 순수 텍스트로만 출력")
+
+  (2) _section_aware_chunks(text, max_size) 신규 추가:
+    - "## 제목" 기준으로 텍스트를 분리
+    - 각 청크 앞에 해당 섹션 제목을 prefix로 붙임
+    - 예) "## 이진 트리\n[3페이지]\nint left, right;..."
+    - ## 마커가 없는 문서는 기존 고정 크기 청킹으로 폴백
+
+주의:
+  - 새로 업로드하는 문서부터 적용됨
+  - 기존 문서는 삭제 후 재업로드 필요
+
+수정 파일: services/document_rag.py
+
+
+----------------------------------------------------------------
+[수정 36] 파일 업로드 시 폴더 미선택 차단
+----------------------------------------------------------------
+
+수정 내용:
+  - UploadModal.tsx: 업로드 버튼 클릭 시 showFolderSelect=true이고
+    selectedCategoryId가 null이면 "폴더를 선택해주세요." 에러 메시지 표시 후 차단
+
+수정 파일: components/UploadModal.tsx
+
+
+----------------------------------------------------------------
+[수정 37] git 커밋 계정 설정
+----------------------------------------------------------------
+
+문제:
+  임시 레포에서 push 시 ih021088-ui(개인 Gmail 연결 계정)로 커밋이 들어가는 문제.
+
+원인:
+  전역 .gitconfig가 없어 임시 레포에서 수동으로 ih021088@gmail.com을 설정했음.
+
+수정 내용:
+  git config --global user.name "21017030"
+  git config --global user.email "21017030@suwon.ac.kr"
+
+  이후 모든 레포에서 21017030@suwon.ac.kr로 커밋 생성됨.
+
+
+----------------------------------------------------------------
+[수정 38] 백업 레포 추가
+----------------------------------------------------------------
+
+백업 레포 목록:
+  - hackathon-frontend-backup: https://github.com/21017030/hackathon-frontend-backup
+  - hackathon-backend-backup:  https://github.com/21017030/hackathon-backend-backup
+
+수동 백업 방법:
+  FRONTEND_BACKUP_TOKEN="..."
+  git -C /tmp/hackathon-frontend push \
+    "https://21017030:${FRONTEND_BACKUP_TOKEN}@github.com/21017030/hackathon-frontend-backup.git" main
+
+  BACKEND_BACKUP_TOKEN="..."
+  git -C /tmp/hackathon-backend push \
+    "https://21017030:${BACKEND_BACKUP_TOKEN}@github.com/21017030/hackathon-backend-backup.git" main
