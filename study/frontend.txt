@@ -1,5 +1,5 @@
 ================================================================
-  VibeLRS 프론트엔드 구조 및 기능 설명
+  Study Killer (구 VibeLRS) 프론트엔드 구조 및 기능 설명
   스택: Next.js + React + TypeScript + Tailwind CSS + Axios
 ================================================================
 
@@ -15,7 +15,8 @@ frontend/src/
 │   ├── globals.css                # Tailwind 임포트 + typography 플러그인
 │   ├── favicon.ico
 │   ├── register/
-│   │   └── page.tsx               # 회원가입 페이지 (/register)
+│   │   ├── page.tsx               # 회원가입 페이지 (/register)
+│   │   └── layout.tsx             # 탭 타이틀: "Study Killer : 회원가입"
 │   └── mypage/
 │       ├── page.tsx               # 마이페이지 (/mypage) - 정보 열람 + 비밀번호 변경
 │       └── edit/
@@ -28,7 +29,7 @@ frontend/src/
 │
 ├── api/                           # 백엔드 HTTP 호출 전담 레이어
 │   ├── client.ts                  # axios 인스턴스 (baseURL 중앙 관리)
-│   ├── auth.ts                    # 인증 관련 API 함수 (login, register, update)
+│   ├── auth.ts                    # 인증 관련 API 함수 (login, register, update, delete)
 │   ├── categories.ts              # 카테고리 관련 API 함수
 │   ├── documents.ts               # 문서 관련 API 함수
 │   └── chat.ts                    # 채팅 관련 API 함수
@@ -105,6 +106,7 @@ frontend/src/
                                         (true = 사용 가능)
   - updateUser(userId, data)          : PUT /auth/users/{userId} → User
                                         data: { student_id?, login_id?, name?, password? }
+  - deleteUser(userId)                : DELETE /auth/users/{userId}
 
 [categories.ts]
   - getCategories(userId)       : GET /categories/{userId}
@@ -119,7 +121,8 @@ frontend/src/
   - getDocumentChat(documentId) : GET /documents/{documentId}/chat
                                    반환 시 sender_type → sender 매핑 처리
   - clearDocumentChat(documentId)      : DELETE /documents/{documentId}/chat
-  - askAboutDocument(documentId, content) : POST /documents/{documentId}/ask
+  - askAboutDocument(documentId, content, allowAiAnswer?) : POST /documents/{documentId}/ask
+                                        반환 시 sources의 page 필드 null로 자동 삽입 (Source 타입 호환)
 
 [chat.ts]
   - getSessions(userId)          : GET /chat/sessions/{userId}
@@ -253,7 +256,7 @@ frontend/src/
   Props: userName, userStudentId, ... (userId prop 제거됨)
 
   구성 요소 (위→아래 순서):
-    - VibeLRS 로고 (클릭 시 홈으로 이동)
+    - Study Killer 로고 이미지 (public/logo.png, 클릭 시 홈으로 이동)
     - '내 보관함' 버튼
     - '새 대화 시작' 버튼 → 인라인 입력폼으로 전환
     - Categories 섹션 (접기/펼치기)
@@ -298,7 +301,12 @@ frontend/src/
     - USER 메시지: 우측, 인디고 배경, plain text
     - AI 메시지: 좌측, ReactMarkdown + remark-math + rehype-katex 렌더링
     - AI 메시지 하단: sources가 있으면 '참고 자료' 배지 표시
+      * 일반 파일: 인디고 FileText 배지
+      * AI 지식 사용: 보라색 Sparkles 배지 ("AI 답변")
     - 입력창: Enter 전송, Shift+Enter 줄바꿈
+    - 입력창 하단: "AI 답변 허용" 체크박스 (보라색 accent)
+      * 체크 시 강의자료에 없으면 AI 자체 지식으로 보완 답변
+      * 미체크 시 강의자료 + 이전 대화만 참고, AI 지식 답변은 히스토리에서도 제외
 
 [DocumentViewerPane.tsx]
   역할: 문서 뷰어 + 우측 미니 채팅 패널
@@ -307,13 +315,19 @@ frontend/src/
     - 좌측: PDF→<iframe>, 그 외→<pre>
     - 우측: 미니 채팅 패널 (접기/펼치기)
       * 대화 내역 있으면 초기화 버튼 표시
-      * AI 메시지 ReactMarkdown 렌더링 (출처 표시 없음)
+      * AI 메시지 ReactMarkdown 렌더링
+      * AI 지식 사용 시 보라색 Sparkles "AI 답변" 출처 배지 표시
+      * 입력창 하단: "AI 답변 허용" 체크박스 (메인 채팅과 동일 동작)
 
 [UploadModal.tsx]
   uploadStatus: null | 'uploading' | 'analyzing'
     (1) null: 업로드 다이얼로그 (폴더 선택 + 파일 드롭존)
     (2) uploading: "파일을 저장하는 중..." 오버레이
     (3) analyzing: "AI가 문서를 분석하는 중..." 오버레이
+
+  유효성 검사:
+    - showFolderSelect=true 상태에서 폴더 미선택 시 업로드 차단
+    - "폴더를 선택해주세요." 에러 메시지 표시
 
 
 ----------------------------------------------------------------
@@ -362,6 +376,11 @@ frontend/src/
   - 로그인 정보 표시 (아이디, 이름, 학번) - 읽기 전용
   - "사용자 정보 수정" 버튼 → /mypage/edit 이동
   - 비밀번호 변경 폼 (6자 이상, 확인 일치 검사)
+  - 하단 "회원 탈퇴" 버튼 (빨간색):
+    confirm() 후 DELETE /auth/users/{id} 호출
+    → localStorage 초기화 → '/'로 이동
+    삭제 순서: document_chat_messages → document_chunks → documents(+Storage 파일)
+              → chat_messages → chat_sessions → categories → users
 
 [mypage/edit/page.tsx] - 정보 수정 페이지 (/mypage/edit)
   - useRequireAuth()로 인증 가드 (미로그인 시 / redirect)
