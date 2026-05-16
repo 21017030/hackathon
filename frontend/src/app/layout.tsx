@@ -10,7 +10,7 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Study Killer",
+  title: "VibeLRS",
   description: "대학생을 위한 RAG 기반 AI 학습 보조 시스템",
 };
 
