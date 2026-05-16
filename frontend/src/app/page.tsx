@@ -151,6 +151,7 @@ export default function App() {
   };
 
   const handleSessionDelete = async (id: number) => {
+    if (!confirm('대화 내역이 모두 삭제됩니다. 계속하시겠습니까?')) return;
     try {
       await deleteSession(id);
       setSessions(prev => prev.filter(s => s.id !== id));
@@ -163,13 +164,13 @@ export default function App() {
     }
   };
 
-  const handleSend = (content: string) => {
+  const handleSend = (content: string, allowAiAnswer: boolean) => {
     requireAuth(() => {
       // 선택된 폴더가 있다면 해당 폴더 내의 문서들만 참고하여 답변하도록 설정
       const docIds = selectedCategoryId
         ? documents.filter(d => d.category_id === selectedCategoryId).map(d => d.id)
         : undefined;
-      sendMessage(content, docIds);
+      sendMessage(content, docIds, allowAiAnswer);
     });
   };
 
@@ -305,7 +306,7 @@ export default function App() {
               documentId={activeTabId}
               messages={activeTab.messages}
               isAsking={activeTab.isAsking}
-              onSend={(content) => askInTab(activeTabId, content)}
+              onSend={(content, allowAiAnswer) => askInTab(activeTabId, content, allowAiAnswer)}
               onClear={() => clearTab(activeTabId)}
             />
           </div>

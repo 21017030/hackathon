@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { Loader2, Send, ChevronRight, ChevronLeft, Bot, FileText, Trash2 } from 'lucide-react';
+import { Loader2, Send, ChevronRight, ChevronLeft, Bot, FileText, Trash2, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -13,7 +13,7 @@ interface Props {
   documentId: number;
   messages: SimpleMessage[];
   isAsking: boolean;
-  onSend: (content: string) => void;
+  onSend: (content: string, allowAiAnswer: boolean) => void;
   onClear: () => void;
 }
 
@@ -26,6 +26,7 @@ export default function DocumentViewerPane({ documentId, messages, isAsking, onS
   const [isLoading, setIsLoading] = useState(true);
   const [chatOpen, setChatOpen] = useState(true); // 우측 채팅 패널 펼침 여부
   const [input, setInput] = useState('');
+  const [allowAiAnswer, setAllowAiAnswer] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // documentId가 바뀔 때마다 새 문서 데이터를 로드
@@ -45,7 +46,7 @@ export default function DocumentViewerPane({ documentId, messages, isAsking, onS
   /** 채팅 입력창 전송 핸들러 */
   const handleSend = () => {
     if (!input.trim() || isAsking) return;
-    onSend(input.trim());
+    onSend(input.trim(), allowAiAnswer);
     setInput('');
   };
 
@@ -138,12 +139,19 @@ export default function DocumentViewerPane({ documentId, messages, isAsking, onS
                           <div className="mt-2 pt-2 border-t border-gray-200">
                             <p className="text-[10px] font-bold text-gray-400 mb-1">참고 자료</p>
                             <div className="flex flex-col gap-1">
-                              {msg.sources.map((src, i) => (
-                                <div key={i} className="flex items-center gap-1 text-[10px] text-indigo-500 font-bold">
-                                  <FileText size={9} />
-                                  <span>{src.filename}</span>
-                                </div>
-                              ))}
+                              {msg.sources.map((src, i) =>
+                                src.filename === 'AI 답변' ? (
+                                  <div key={i} className="flex items-center gap-1 text-[10px] text-purple-500 font-bold">
+                                    <Sparkles size={9} />
+                                    <span>AI 답변</span>
+                                  </div>
+                                ) : (
+                                  <div key={i} className="flex items-center gap-1 text-[10px] text-indigo-500 font-bold">
+                                    <FileText size={9} />
+                                    <span>{src.filename}</span>
+                                  </div>
+                                )
+                              )}
                             </div>
                           </div>
                         )}
@@ -166,30 +174,44 @@ export default function DocumentViewerPane({ documentId, messages, isAsking, onS
 
             {/* 입력창 */}
             <div className="p-3 border-t border-gray-100 shrink-0">
-              <div className="flex items-end gap-2 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 focus-within:border-indigo-300 transition-colors">
-                <textarea
-                  rows={1}
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  placeholder="질문 입력..."
-                  disabled={isAsking}
-                  className="flex-1 bg-transparent text-xs resize-none focus:outline-none max-h-24 disabled:opacity-50"
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || isAsking}
-                  className="p-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-gray-200 transition-all shrink-0"
-                >
-                  {isAsking
-                    ? <Loader2 size={13} className="animate-spin" />
-                    : <Send size={13} />}
-                </button>
+              <div className="flex flex-col gap-1.5 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2 focus-within:border-indigo-300 transition-colors">
+                <div className="flex items-end gap-2">
+                  <textarea
+                    rows={1}
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    placeholder="질문 입력..."
+                    disabled={isAsking}
+                    className="flex-1 bg-transparent text-xs resize-none focus:outline-none max-h-24 disabled:opacity-50"
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim() || isAsking}
+                    className="p-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-gray-200 transition-all shrink-0"
+                  >
+                    {isAsking
+                      ? <Loader2 size={13} className="animate-spin" />
+                      : <Send size={13} />}
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5 px-0.5">
+                  <input
+                    type="checkbox"
+                    id="mini-allow-ai-answer"
+                    checked={allowAiAnswer}
+                    onChange={e => setAllowAiAnswer(e.target.checked)}
+                    className="w-3 h-3 rounded accent-purple-500 cursor-pointer"
+                  />
+                  <label htmlFor="mini-allow-ai-answer" className="text-[10px] text-gray-600 font-semibold cursor-pointer select-none">
+                    AI 답변 허용
+                  </label>
+                </div>
               </div>
             </div>
           </>

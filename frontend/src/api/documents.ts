@@ -58,7 +58,8 @@ export async function clearDocumentChat(documentId: number): Promise<void> {
 export async function askAboutDocument(
   documentId: number,
   content: string,
-): Promise<{ answer: string }> {
-  const res = await client.post(`/documents/${documentId}/ask`, { content });
-  return { answer: res.data.answer };
+  allowAiAnswer: boolean = false,
+): Promise<{ answer: string; sources?: { filename: string; category: string }[] }> {
+  const res = await client.post(`/documents/${documentId}/ask`, { content, allow_ai_answer: allowAiAnswer });
+  return { answer: res.data.answer, sources: res.data.sources };
 }

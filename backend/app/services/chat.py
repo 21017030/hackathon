@@ -94,12 +94,16 @@ def _extract_sources(chunks: list) -> list:
 
 def _filter_used_sources(ai_answer: str, all_sources: list) -> tuple[str, list]:
     """Gemini가 명시한 파일명만 출처로 필터링하고 마커를 답변에서 제거."""
+    # 프롬프트 구조 텍스트가 응답에 포함된 경우 제거
+    ai_answer = re.sub(r'\[이전 대화 내역\].*', '', ai_answer, flags=re.DOTALL).strip()
     match = re.search(r'\[참고자료:([^\]]*)\]', ai_answer)
     if not match:
         return ai_answer, []
     used_names = {f.strip() for f in match.group(1).split('|') if f.strip()}
-    filtered = [s for s in all_sources if s['filename'] in used_names]
     cleaned = re.sub(r'\[참고자료:[^\]]*\]', '', ai_answer).strip()
+    filtered = [s for s in all_sources if s['filename'] in used_names]
+    if 'AI 답변' in used_names:
+        filtered.append({"filename": "AI 답변", "category": "AI 답변"})
     return cleaned, filtered
 
 
@@ -131,6 +135,17 @@ def _load_history(session_id: int, limit: int = HISTORY_LIMIT) -> list:
         .limit(limit) \
         .execute()
     return res.data[::-1]
+
+
+def _filter_ai_history(history: list) -> list:
+    """AI 지식으로 답변된 AI 메시지를 히스토리에서 제외."""
+    return [
+        msg for msg in history
+        if not (
+            msg.get('sender_type') == 'AI' and
+            any(s.get('filename') == 'AI 답변' for s in (msg.get('sources') or []))
+        )
+    ]
 
 
 def _save_message(session_id: int, sender_type: str, content: str, sources: list = None) -> dict:
@@ -168,15 +183,47 @@ async def _generate_embedding(text: str) -> List[float]:
     return res.embeddings[0].values
 
 
-def _build_prompt(context: str, history_str: str, content: str, filenames: str) -> str:
-    return f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
-제공된 [강의자료 내용]을 바탕으로 사용자의 질문에 답변하세요.
-자료에서 답을 찾을 수 없다면 솔직하게 말하세요.
+def _build_prompt(context: str, history_str: str, content: str, filenames: str, allow_ai_answer: bool = False) -> str:
+    if allow_ai_answer:
+        return f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
+아래 우선순위에 따라 답변하세요.
+
+1순위: [강의자료 내용]에서 답을 찾아 답변하세요.
+2순위: 강의자료에 없거나 내용이 부족하다면 AI 자신의 지식으로 완전하고 성실하게 답변하세요. 이 경우 답변 첫 문장을 반드시 아래 중 상황에 맞게 시작하세요:
+  - 강의자료에 내용이 전혀 없는 경우: "강의자료에 해당 내용이 없어 AI 지식으로 답변드립니다."
+  - 강의자료에 내용이 있지만 부족한 경우: "강의자료의 내용이 충분하지 않아 AI 지식으로 보완하여 답변드립니다."
+
 페이지를 묻는 질문이라면 강의자료 내용의 페이지 표시를 참고하여 알려주세요.
 
-답변 맨 끝에 실제로 참고한 파일명만 아래 형식으로 추가하세요 (참고하지 않은 파일은 제외):
+답변 맨 끝에 실제로 활용한 출처만 아래 형식으로 표시하세요:
+- 강의자료만으로 완전히 답변한 경우: [참고자료: 파일명1|파일명2]
+- AI 지식을 조금이라도 활용한 경우: [참고자료: 파일명1|AI 답변] (강의자료도 참고했다면 파일명 포함)
+- AI 지식만 활용한 경우: [참고자료: AI 답변]
+실제로 내용을 참고하지 않은 파일은 절대 포함하지 마세요.
+가능한 파일명: {filenames}
+
+[강의자료 내용]
+{context}
+
+[이전 대화 내역]
+{history_str}
+
+사용자 질문: {content}
+
+답변:"""
+    return f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
+아래 우선순위에 따라 답변하세요.
+
+1순위: [강의자료 내용]에서 답을 찾아 답변하세요.
+2순위: 강의자료에 없다면 [이전 대화 내역]을 참고하여 답변하세요.
+3순위: 둘 다 없으면 솔직하게 모른다고 말하세요.
+
+페이지를 묻는 질문이라면 강의자료 내용의 페이지 표시를 참고하여 알려주세요.
+
+답변에 실제로 활용한 강의자료가 있을 경우에만 답변 맨 끝에 아래 형식으로 추가하세요:
 [참고자료: 파일명1|파일명2]
 가능한 파일명: {filenames}
+강의자료에서 답을 찾지 못했거나 활용하지 않은 경우에는 [참고자료:] 마커를 출력하지 마세요.
 
 [강의자료 내용]
 {context}
@@ -189,10 +236,12 @@ def _build_prompt(context: str, history_str: str, content: str, filenames: str) 
 답변:"""
 
 
-async def ask_question(session_id: int, content: str, document_ids: Optional[List[int]] = None):
+async def ask_question(session_id: int, content: str, document_ids: Optional[List[int]] = None, allow_ai_answer: bool = False):
     try:
         # 1. 과거 대화 내역 (현재 질문 저장 전에 조회)
         history = _load_history(session_id)
+        if not allow_ai_answer:
+            history = _filter_ai_history(history)
 
         # 2. 사용자 질문 저장
         logger.info(f"Saving user message to session {session_id}")
@@ -213,7 +262,7 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         # 5. 프롬프트 생성 및 답변
         history_str = "\n".join([f"{m['sender_type']}: {m['content']}" for m in history])
         filenames = "|".join(s['filename'] for s in sources)
-        prompt = _build_prompt(context, history_str, content, filenames)
+        prompt = _build_prompt(context, history_str, content, filenames, allow_ai_answer)
 
         logger.info(f"Prompting {CHAT_MODEL} for session {session_id}")
         response = gemini_call(client.models.generate_content, model=CHAT_MODEL, contents=prompt)
@@ -231,7 +280,7 @@ async def ask_question(session_id: int, content: str, document_ids: Optional[Lis
         raise HTTPException(status_code=500, detail="AI 응답 생성 중 오류가 발생했습니다.")
 
 
-async def ask_about_document(document_id: int, content: str) -> dict:
+async def ask_about_document(document_id: int, content: str, allow_ai_answer: bool = False) -> dict:
     try:
         # 1. 사용자 메시지 저장
         supabase.table("document_chat_messages").insert({
@@ -256,13 +305,34 @@ async def ask_about_document(document_id: int, content: str) -> dict:
         # 4. 관련 청크 검색
         chunks = await get_relevant_chunks_with_sources(query_vector, [document_id])
         context = _build_context(chunks)
+        sources = _extract_sources(chunks)
+        filename = sources[0]['filename'] if sources else '문서'
 
         history_str = "\n".join([
             f"{'사용자' if m['sender_type'] == 'USER' else 'AI'}: {m['content'][:300]}"
             for m in history
         ])
 
-        prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
+        if allow_ai_answer:
+            prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
+아래 우선순위에 따라 답변하세요.
+
+1순위: [문서 내용]에서 답을 찾아 답변하세요.
+2순위: 문서에 없거나 내용이 부족하다면 AI 자신의 지식으로 완전하고 성실하게 답변하세요. 이 경우 답변 첫 문장을 반드시 아래 중 상황에 맞게 시작하세요:
+  - 문서에 내용이 전혀 없는 경우: "문서에 해당 내용이 없어 AI 지식으로 답변드립니다."
+  - 문서에 내용이 있지만 부족한 경우: "문서의 내용이 충분하지 않아 AI 지식으로 보완하여 답변드립니다."
+
+[문서 내용]
+{context}
+
+[이전 대화 내역]
+{history_str}
+
+질문: {content}
+
+답변:"""
+        else:
+            prompt = f"""당신은 대학생의 학습을 돕는 AI 어시스턴트입니다.
 아래 [문서 내용]을 바탕으로 질문에 간결하게 답변하세요.
 자료에 없는 내용은 솔직하게 모른다고 말하세요.
 
@@ -277,7 +347,15 @@ async def ask_about_document(document_id: int, content: str) -> dict:
 답변:"""
 
         response = gemini_call(client.models.generate_content, model=CHAT_MODEL, contents=prompt)
-        answer = response.text or ""
+        answer = re.sub(r'\[이전 대화 내역\].*', '', response.text or "", flags=re.DOTALL).strip()
+
+        # AI 지식 사용 여부 판단
+        used_ai = allow_ai_answer and any(
+            phrase in answer for phrase in ["AI 지식으로 답변드립니다", "AI 지식으로 보완하여"]
+        )
+        final_sources: list = []
+        if used_ai:
+            final_sources = [{"filename": "AI 답변", "category": "AI 답변"}]
 
         # 5. AI 답변 저장
         supabase.table("document_chat_messages").insert({
@@ -286,7 +364,7 @@ async def ask_about_document(document_id: int, content: str) -> dict:
             "content": answer,
         }).execute()
 
-        return {"answer": answer, "sources": []}
+        return {"answer": answer, "sources": final_sources}
 
     except HTTPException:
         raise
