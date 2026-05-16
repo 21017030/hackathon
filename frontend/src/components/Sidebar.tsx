@@ -57,7 +57,7 @@ export default function Sidebar({
           onClick={onHomeClick}
         >
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">V</div>
-          <span className="text-xl font-bold tracking-tight text-indigo-900">VibeLRS</span>
+          <span className="text-xl font-bold tracking-tight text-indigo-900">Study Killer</span>
         </div>
 
         <nav className="space-y-1">

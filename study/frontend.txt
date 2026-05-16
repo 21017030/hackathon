@@ -1,5 +1,5 @@
 ================================================================
-  VibeLRS 프론트엔드 구조 및 기능 설명
+  Study Killer 프론트엔드 구조 및 기능 설명
   스택: Next.js + React + TypeScript + Tailwind CSS + Axios
 ================================================================
 
@@ -253,7 +253,7 @@ frontend/src/
   Props: userName, userStudentId, ... (userId prop 제거됨)
 
   구성 요소 (위→아래 순서):
-    - VibeLRS 로고 (클릭 시 홈으로 이동)
+    - Study Killer 로고 (클릭 시 홈으로 이동)
     - '내 보관함' 버튼
     - '새 대화 시작' 버튼 → 인라인 입력폼으로 전환
     - Categories 섹션 (접기/펼치기)

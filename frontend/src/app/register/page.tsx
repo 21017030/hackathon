@@ -112,7 +112,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-[#F8F9FB] flex items-center justify-center py-10">
       <div className="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
-        <h1 className="text-2xl font-bold text-indigo-600 text-center mb-2">VibeLRS</h1>
+        <h1 className="text-2xl font-bold text-indigo-600 text-center mb-2">Study Killer</h1>
         <p className="text-center text-gray-500 text-sm mb-8">회원가입</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
@@ -155,7 +155,7 @@ export default function RegisterPage() {
               placeholder="6자 이상 입력하세요"
               value={form.password}
               onChange={e => set('password', e.target.value)}
-              className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.password ? 'border-red-400' : 'border-gray-200'}`}
+              className={`border rounded-lg px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 ${errors.password ? 'border-red-400' : 'border-gray-200'}`}
             />
             {errors.password && <p className="text-red-500 text-xs">{errors.password}</p>}
           </div>
@@ -168,7 +168,7 @@ export default function RegisterPage() {
               placeholder="비밀번호를 다시 입력하세요"
               value={form.passwordConfirm}
               onChange={e => set('passwordConfirm', e.target.value)}
-              className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.passwordConfirm ? 'border-red-400' : 'border-gray-200'}`}
+              className={`border rounded-lg px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 ${errors.passwordConfirm ? 'border-red-400' : 'border-gray-200'}`}
             />
             {errors.passwordConfirm && (
               <p className="text-red-500 text-xs">{errors.passwordConfirm}</p>
@@ -183,7 +183,7 @@ export default function RegisterPage() {
               placeholder="이름을 입력하세요"
               value={form.name}
               onChange={e => set('name', e.target.value)}
-              className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.name ? 'border-red-400' : 'border-gray-200'}`}
+              className={`border rounded-lg px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 ${errors.name ? 'border-red-400' : 'border-gray-200'}`}
             />
             {errors.name && <p className="text-red-500 text-xs">{errors.name}</p>}
           </div>
@@ -196,7 +196,7 @@ export default function RegisterPage() {
               placeholder="학번을 입력하세요"
               value={form.studentId}
               onChange={e => set('studentId', e.target.value)}
-              className={`border rounded-lg px-4 py-2.5 text-sm outline-none focus:border-indigo-400 ${errors.studentId ? 'border-red-400' : 'border-gray-200'}`}
+              className={`border rounded-lg px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 ${errors.studentId ? 'border-red-400' : 'border-gray-200'}`}
             />
             {errors.studentId && <p className="text-red-500 text-xs">{errors.studentId}</p>}
           </div>

@@ -45,7 +45,7 @@ export default function AuthScreen({ onSuccess, onClose }: Props) {
           <X size={18} />
         </button>
       )}
-      <h1 className="text-2xl font-bold text-indigo-600 text-center mb-2">VibeLRS</h1>
+      <h1 className="text-2xl font-bold text-indigo-600 text-center mb-2">Study Killer</h1>
       <p className="text-center text-gray-500 text-sm mb-8">로그인</p>
 
       <form onSubmit={handleLogin} className="flex flex-col gap-4">
