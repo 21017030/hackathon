@@ -66,8 +66,8 @@ backend/
 [gemini.py]  ← 신규
   - Gemini 클라이언트(genai.Client)와 모든 모델/파라미터 상수를 한 곳에서 관리.
   - 상수 목록:
-      CHAT_MODEL            = "gemini-3.1-flash-lite"
-      REWRITE_MODEL         = "gemini-3.1-flash-lite"
+      CHAT_MODEL            = "gemini-2.5-flash-lite"
+      REWRITE_MODEL         = "gemini-2.5-flash-lite"
       EMBEDDING_MODEL       = "gemini-embedding-001"
       EMBEDDING_DIMENSIONS  = 1536
       CHUNK_SIZE            = 1000   (RAG 청킹 단위, 문자 수)
@@ -169,19 +169,28 @@ backend/
   _extract_pdf_gemini(file_bytes, filename)  ← 내부 헬퍼
     - Gemini Files API로 PDF를 업로드해 멀티모달 텍스트 추출
     - 이미지·표·차트 설명 포함, 각 페이지에 [N페이지] 마커 삽입
+    - 슬라이드/페이지 제목을 "## 제목명" 형식으로 마킹 (섹션 청킹용)
+    - client.files.upload(file=tmp_path, ...) 로 업로드 (path= 아님 주의)
     - 임시 파일 생성 → 업로드 → 추출 → 임시 파일·업로드 파일 모두 정리
     - 실패 시 PyMuPDF(fitz)로 폴백
+
+  _section_aware_chunks(text, max_size)  ← 내부 헬퍼
+    - "## 제목" 기준으로 섹션 분리 후 max_size(1000)까지 합산하여 청크 생성
+    - 섹션이 작으면 다음 섹션과 합산 → DB 행 수 절감
+    - 섹션 하나가 max_size 초과 시 고정 크기로 분할
+    - ## 마커 없는 문서는 고정 크기 청킹으로 폴백
 
   process_document_rag(document_id)  ← 백그라운드 비동기 실행
     RAG 인제스천 파이프라인 전체:
     Step 1. Supabase Storage에서 파일 바이트 다운로드
-    Step 2. _extract_pdf_gemini()로 멀티모달 텍스트 추출 (실패 시 PyMuPDF 폴백)
-    Step 3. CHUNK_SIZE(1000)자 단위로 텍스트 청킹
+    Step 2. _extract_pdf_gemini()로 멀티모달 텍스트 추출
+            성공 → fallback_used=False / 실패 시 PyMuPDF 폴백 → fallback_used=True
+    Step 3. _section_aware_chunks()로 섹션 합산 청킹 (최대 CHUNK_SIZE=1000자)
     Step 4. 각 청크를 gemini-embedding-001로 임베딩 벡터 생성
             task_type="retrieval_document", dimensions=1536
     Step 5. document_chunks 테이블에 (content, embedding, chunk_index) INSERT
-    Step 6. documents 테이블 parsing_status를 'COMPLETED'로 업데이트
-            (실패 시 'FAILED'로 업데이트)
+    Step 6. documents 테이블 parsing_status 업데이트
+            Gemini 성공 → 'COMPLETED' / PyMuPDF 폴백 → 'PARTIAL' / 오류 → 'FAILED'
 
 [document.py]  ← 하위 호환 re-export 레이어
   실제 구현은 document_storage.py와 document_rag.py에 있음.
@@ -219,6 +228,10 @@ backend/
     - history가 없으면 content 그대로 반환 (불필요한 API 호출 방지)
     - 최근 REWRITE_HISTORY_WINDOW(4)개 대화만 사용
     - 실패 시 원본 content 반환 (예외 흡수)
+    ※ 원래 질문의 의도 보존 규칙:
+      - 지시어('그거', '이거', '거기서' 등)가 있을 때만 맥락으로 보완
+      - 강의자료 커버리지 질문('자세히 안나와있지 않아?' 등)은 검색 쿼리로 바꾸지 않음
+      - 질문이 이미 명확하면 그대로 반환
 
   get_relevant_chunks(query_vector, document_ids, limit=RAG_CHUNK_LIMIT)
     - Supabase RPC 'match_document_chunks' 호출
@@ -230,7 +243,9 @@ backend/
     - documents·categories 테이블 조인하여 출처 메타데이터 보강
 
   _build_context(chunks), _extract_sources(chunks)
-    - 프롬프트용 문자열 생성 / 중복 제거된 출처 목록 반환
+    - _build_context: 각 청크 앞에 "[#ref: 파일명]" 내부 식별자 라벨을 붙여 문자열 생성
+      ※ "[출처: ...]" 형식은 AI가 답변에 그대로 복사하는 문제가 있어 "[#ref: ...]"로 변경
+    - _extract_sources: 중복 제거된 출처 목록 반환
 
   _filter_used_sources(ai_answer, all_sources)
     - AI 답변 끝의 [참고자료: 파일명1|파일명2] 마커를 파싱
@@ -324,7 +339,8 @@ categories
 documents
   id (PK), user_id (FK→users.id), category_id (FK→categories.id),
   original_file_name, file_path, parsing_status, created_at
-  parsing_status: 'PENDING' | 'COMPLETED' | 'FAILED'
+  parsing_status: 'PENDING' | 'COMPLETED' | 'PARTIAL' | 'FAILED'
+  ※ PARTIAL: Gemini 추출 실패 후 PyMuPDF 폴백으로 처리된 경우 (이미지·표 인식 없음)
 
 document_chunks
   id (PK), document_id (FK→documents), content, embedding (vector(1536)),

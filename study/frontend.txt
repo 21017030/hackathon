@@ -77,7 +77,8 @@ frontend/src/
                  id는 UUID 문자열. localStorage에 JSON으로 저장됨.
   Category     : { id, name }
   Document     : { id, original_file_name, parsing_status, category_id, created_at }
-                 parsing_status: 'PENDING' | 'COMPLETED' | 'FAILED'
+                 parsing_status: 'PENDING' | 'COMPLETED' | 'PARTIAL' | 'FAILED'
+                 PARTIAL: Gemini 추출 실패 후 PyMuPDF 폴백으로 처리된 상태
   ChatSession  : { id, title, created_at }
   Source       : { filename, category }
   Message      : { id, sender_type, content, created_at, sources?: Source[] }
@@ -287,7 +288,8 @@ frontend/src/
   역할: 문서 목록 테이블 + 업로드 버튼 + StatusBadge
 
   Props: documents, categories, selectedCategoryId, onUpload, onDeleteDocument, onViewDocument
-  내부 컴포넌트: StatusBadge (COMPLETED=초록, PENDING=노란색+회전, FAILED=빨간색)
+  내부 컴포넌트: StatusBadge (COMPLETED=초록, PARTIAL=노란색 ⚠️, PENDING=노란색+회전, FAILED=빨간색)
+                ※ PARTIAL: hover 시 "이미지/표 인식 없이 텍스트만 추출되었습니다" 툴팁 표시
 
   구성 요소:
     - 상단 툴바: "X개의 파일" 카운트 + 업로드 버튼(onUpload)
@@ -328,6 +330,11 @@ frontend/src/
   유효성 검사:
     - showFolderSelect=true 상태에서 폴더 미선택 시 업로드 차단
     - "폴더를 선택해주세요." 에러 메시지 표시
+
+  업로드 위치 표시:
+    - showFolderSelect=false이고 initialCategoryId가 있으면
+      폴더 드롭다운 대신 "📁 폴더명  업로드 위치" 읽기 전용 배너 표시 (인디고 계열)
+    - 폴더 안에서 파일 추가 시 어느 폴더에 들어가는지 명시
 
 
 ----------------------------------------------------------------
